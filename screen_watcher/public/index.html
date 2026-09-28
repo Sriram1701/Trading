@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotex AI Pro Copilot V2 - Advanced Screen Scanner & 90%+ Signal Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Top Pro Navigation Bar -->
+        <header class="top-nav">
+            <div class="nav-left">
+                <div class="logo-shield">
+                    <span class="shield-icon">🤖</span>
+                    <span class="pulse-ring"></span>
+                </div>
+                <div class="brand-info">
+                    <div class="brand-title">
+                        <h1>QUOTEX AI PRO COPILOT <span class="version-tag">v2.0 PRO</span></h1>
+                    </div>
+                    <p class="brand-tagline">Real-Time Computer Vision • Candlestick Geometry • Strict 5-Pillar Confluence</p>
+                </div>
+            </div>
+
+            <div class="nav-center">
+                <!-- Accuracy & Session Stats -->
+                <div class="stats-ribbon">
+                    <div class="stat-pill">
+                        <span class="stat-label">WIN RATE</span>
+                        <span class="stat-val win" id="sessionWinRate">100%</span>
+                    </div>
+                    <div class="stat-pill">
+                        <span class="stat-label">SIGNALS</span>
+                        <span class="stat-val" id="totalSignalsCount">0</span>
+                    </div>
+                    <div class="stat-pill">
+                        <span class="stat-label">W / L</span>
+                        <span class="stat-val"><span id="winCount" class="win">0</span> / <span id="lossCount" class="loss">0</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-right">
+                <div class="status-indicator live" id="scannerStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-label" id="statusLabel">READY</span>
+                </div>
+                <div class="timer-card">
+                    <div class="clock-display" id="clockDisplay">00:00:00</div>
+                    <div class="countdown-bar-container">
+                        <div class="countdown-bar" id="countdownProgress"></div>
+                    </div>
+                    <span class="candle-time-text" id="candleTimerText">New Candle in 60s</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="workspace-grid">
+            <!-- Left Panel: Live Stream, Interactive Calibration & Real-time Signal Banner -->
+            <div class="stream-panel">
+                <div class="toolbar-card">
+                    <div class="toolbar-left">
+                        <button id="startStreamBtn" class="btn btn-primary glow-cyan">
+                            <span class="icon">🎥</span> Start Screen Watcher
+                        </button>
+                        <button id="stopStreamBtn" class="btn btn-danger" disabled>
+                            <span class="icon">⏹</span> Stop
+                        </button>
+                        <div class="selector-dropdown-group">
+                            <button id="selectRoiBtn" class="btn btn-secondary" title="Select specific area of chart to scan">
+                                <span class="icon">📐</span> Set Chart Box (ROI)
+                            </button>
+                            <button id="resetRoiBtn" class="btn btn-outline-sm" title="Reset Selection">Reset</button>
+                        </div>
+                    </div>
+                    <div class="toolbar-right">
+                        <div class="control-group">
+                            <span class="preset-label">⏱️ Target Expiry:</span>
+                            <select id="expiryTimeframeSelect" class="styled-select highlight-select">
+                                <option value="auto" selected>🤖 Auto-AI Optimal (5s - 5m)</option>
+                                <option value="5s">⚡ 5 Seconds (Turbo Scalp)</option>
+                                <option value="10s">⚡ 10 Seconds (Fast Scalp)</option>
+                                <option value="15s">⚡ 15 Seconds (Scalp)</option>
+                                <option value="30s">⚡ 30 Seconds (Micro Scalp)</option>
+                                <option value="45s">⚡ 45 Seconds (Scalp)</option>
+                                <option value="1m">⏱️ 1 Minute (Standard)</option>
+                                <option value="2m">⏱️ 2 Minutes (Reversal)</option>
+                                <option value="3m">⏱️ 3 Minutes (Momentum)</option>
+                                <option value="5m">⏱️ 5 Minutes (Trend Flow)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <span class="preset-label">Trading Strategy:</span>
+                            <select id="strategyModeSelect" class="styled-select highlight-select">
+                                <option value="reel" selected>🎯 Reel 99% Strategy: BB(20,2) + RSI(80/20) + EMA Cross</option>
+                                <option value="confluence">🔥 90-100% Strict Multi-Confluence (5 Pillars)</option>
+                                <option value="reversal">⚡ Pure Bollinger Band + Pinbar Reversal</option>
+                                <option value="trend">📈 Strong EMA 9/21/50 Trend Flow</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fast Timeframe Switcher Ribbon -->
+                <div class="tf-ribbon-bar">
+                    <span class="tf-label">Quick Expiry:</span>
+                    <div class="tf-pill-group" id="tfPillGroup">
+                        <button class="tf-pill active" data-tf="auto">Auto AI</button>
+                        <button class="tf-pill" data-tf="5s">5s</button>
+                        <button class="tf-pill" data-tf="10s">10s</button>
+                        <button class="tf-pill" data-tf="30s">30s</button>
+                        <button class="tf-pill" data-tf="1m">1m</button>
+                        <button class="tf-pill" data-tf="2m">2m</button>
+                        <button class="tf-pill" data-tf="3m">3m</button>
+                        <button class="tf-pill" data-tf="5m">5m</button>
+                    </div>
+                </div>
+
+                <!-- Video Viewport Container with Overlay Canvas -->
+                <div class="viewport-box" id="viewportBox">
+                    <video id="quotexVideo" autoplay playsinline muted></video>
+                    <canvas id="roiCanvas"></canvas>
+                    <canvas id="processingCanvas"></canvas>
+
+                    <!-- Interactive Drag-to-Select Box -->
+                    <div id="cropBox" class="crop-box hidden">
+                        <div class="crop-handle handle-tl"></div>
+                        <div class="crop-handle handle-tr"></div>
+                        <div class="crop-handle handle-bl"></div>
+                        <div class="crop-handle handle-br"></div>
+                        <div class="crop-header">
+                            <span class="crop-tag">🎯 Quotex Chart Scanner Active</span>
+                        </div>
+                    </div>
+
+                    <!-- Stream Placeholder -->
+                    <div id="streamPlaceholder" class="stream-placeholder">
+                        <div class="placeholder-core">
+                            <div class="ai-orb">
+                                <div class="orb-inner"></div>
+                                <div class="orb-ring"></div>
+                            </div>
+                            <h2>Start Live Quotex Multi-Timeframe Watcher</h2>
+                            <p>Select your <b>Quotex Browser Tab</b>. The AI Pro engine scans candlestick geometry, rejection wicks, RSI 85/20 extremes, and calculates <b>100% Sure Entry Directions + Exact Expiry (5s, 10s, 30s, 1m, 2m, 3m, 5m) with Voice Announcements</b>.</p>
+                            <div class="feature-bullets">
+                                <span>⚡ 5s, 10s, 30s, 1m, 2m, 3m, 5m Multi-Expiry Detection</span>
+                                <span>🎯 100% High-Confluence 5-Pillar Rejection Engine</span>
+                                <span>🔊 Real-Time Tamil & English Voice Announcement (நேரடி குரல்)</span>
+                                <span>🛡️ Anti-Squeeze Fakeout Protection</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- High-Impact Live Alert Flash Banner -->
+                    <div id="actionFlashBanner" class="action-flash-banner hidden">
+                        <div class="flash-inner">
+                            <div class="flash-icon" id="flashIcon">🚀</div>
+                            <div class="flash-content">
+                                <div class="flash-title-row">
+                                    <div class="flash-title" id="flashTitle">STRONG CALL (UP) SIGNAL!</div>
+                                    <div class="flash-expiry-badge" id="flashExpiryBadge">1 MIN EXPIRY</div>
+                                </div>
+                                <div class="flash-subtitle" id="flashSubtitle">Entering on Next Candle</div>
+                            </div>
+                            <div class="flash-countdown" id="flashCountdown">05s</div>
+                        </div>
+                    </div>
+
+                    <!-- Active Trade Live In-Progress HUD Overlay (Locked Scanner) -->
+                    <div id="activeTradeOverlay" class="active-trade-overlay hidden">
+                        <div class="active-trade-card">
+                            <div class="at-header">
+                                <div class="at-badge"><span class="lock-icon">🔒</span> ACTIVE TRADE LOCKED</div>
+                                <div class="at-expiry" id="activeTradeExpiryLabel">3 MIN TRADE</div>
+                            </div>
+                            <div class="at-body">
+                                <div class="at-icon" id="activeTradeIcon">🔻</div>
+                                <div class="at-info">
+                                    <div class="at-direction" id="activeTradeDirection">PUT (DOWN) IN PROGRESS</div>
+                                    <div class="at-desc" id="activeTradeDesc">Scanner is paused until this trade finishes. Next signal will be given after expiry!</div>
+                                </div>
+                                <div class="at-timer-block">
+                                    <span class="at-timer-label">TIME LEFT</span>
+                                    <span class="at-timer-val" id="activeTradeTimer">03:00</span>
+                                </div>
+                            </div>
+                            <div class="at-progress-bar-wrap">
+                                <div class="at-progress-bar" id="activeTradeProgressBar"></div>
+                            </div>
+                            <div class="at-actions">
+                                <div class="at-result-prompt">Trade Finished? Record Outcome:</div>
+                                <div class="at-btn-group">
+                                    <button id="recordWinBtn" class="btn btn-win-action">✅ Won Trade (Win)</button>
+                                    <button id="recordLossBtn" class="btn btn-loss-action">❌ Lost Trade (Loss)</button>
+                                    <button id="cancelTradeBtn" class="btn btn-outline-sm">Cancel / Unlock</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Signal & Pattern HUD -->
+                <div class="signal-hud-v2" id="mainSignalHud">
+                    <div class="hud-main-status">
+                        <div class="hud-action-icon" id="hudActionIcon">⏳</div>
+                        <div class="hud-text-group">
+                            <div class="hud-signal-name" id="hudSignalTitle">SEARCHING FOR 100% SURE SETUP</div>
+                            <div class="hud-signal-sub" id="hudSignalReason">AI is analyzing price momentum, rejection wicks, RSI boundaries, and optimal expiry...</div>
+                        </div>
+                    </div>
+
+                    <div class="hud-metrics">
+                        <div class="metric-block">
+                            <span class="m-label">RECOMMENDED EXPIRY</span>
+                            <span class="m-value tag expiry-pill-badge" id="hudRecommendedExpiry">Auto (5s-5m)</span>
+                        </div>
+                        <div class="metric-block">
+                            <span class="m-label">SIGNAL CONFIDENCE</span>
+                            <span class="m-value highlight" id="hudConfidenceScore">--%</span>
+                        </div>
+                        <div class="metric-block">
+                            <span class="m-label">CANDLE PATTERN</span>
+                            <span class="m-value tag" id="hudDetectedPattern">Neutral</span>
+                        </div>
+                        <div class="metric-block">
+                            <span class="m-label">SUGGESTED TRADE</span>
+                            <span class="action-tag wait" id="hudActionTag">WAIT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pro Live Indicators Gauge Ribbon (Reel Strategy Engine) -->
+                <div class="indicators-live-ribbon">
+                    <div class="ind-card">
+                        <div class="ind-header">
+                            <span class="ind-icon">📊</span>
+                            <span class="ind-title">Bollinger Bands (20,2)</span>
+                        </div>
+                        <div class="ind-val" id="indBbStatus">Inside Band</div>
+                        <div class="ind-sub" id="indBbSub">Band Deviation Normal</div>
+                    </div>
+
+                    <div class="ind-card">
+                        <div class="ind-header">
+                            <span class="ind-icon">⚡</span>
+                            <span class="ind-title">RSI (14) Level [80/20]</span>
+                        </div>
+                        <div class="ind-val highlight" id="indRsiStatus">50.0 (Neutral)</div>
+                        <div class="ind-sub" id="indRsiSub">Overbought >80 / Oversold <20</div>
+                    </div>
+
+                    <div class="ind-card">
+                        <div class="ind-header">
+                            <span class="ind-icon">📈</span>
+                            <span class="ind-title">EMA Flow (9/21/50)</span>
+                        </div>
+                        <div class="ind-val" id="indEmaStatus">Mixed Trend</div>
+                        <div class="ind-sub" id="indEmaSub">Scanning Golden / Death Cross</div>
+                    </div>
+
+                    <div class="ind-card">
+                        <div class="ind-header">
+                            <span class="ind-icon">🕯️</span>
+                            <span class="ind-title">Rejection Wick Ratio</span>
+                        </div>
+                        <div class="ind-val" id="indWickStatus">-- %</div>
+                        <div class="ind-sub" id="indWickSub">Min 35% Wick Required for 99% Entry</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Sidebar: 5-Pillar Confluence, Voice & Audio Settings, Live Logs -->
+            <div class="sidebar-panel">
+                <!-- 6-Pillar Sniper Confluence Card -->
+                <div class="panel-card confluence-panel">
+                    <div class="card-header">
+                        <h3><span class="header-icon">🎯</span> 6-Pillar Sniper 99% Confluence</h3>
+                        <span class="badge-mini" id="confluencePassedBadge">0 / 6 Passed</span>
+                    </div>
+
+                    <div class="pillars-container">
+                        <div class="pillar-row" id="pillarTrend">
+                            <div class="p-info">
+                                <span class="p-icon">📉</span>
+                                <div class="p-text">
+                                    <strong>1. Major Trend Alignment</strong>
+                                    <small id="pillarTrendDesc">Checking EMA 50 Slope & Bias</small>
+                                </div>
+                            </div>
+                            <span class="p-status" id="pillarTrendStatus">Checking...</span>
+                        </div>
+
+                        <div class="pillar-row" id="pillarSqueeze">
+                            <div class="p-info">
+                                <span class="p-icon">🔒</span>
+                                <div class="p-text">
+                                    <strong>2. Anti-Squeeze & Volatility Filter</strong>
+                                    <small id="pillarSqueezeDesc">Filtering flat/choppy consolidation</small>
+                                </div>
+                            </div>
+                            <span class="p-status" id="pillarSqueezeStatus">Checking...</span>
+                        </div>
+
+                        <div class="pillar-row" id="pillarLevel">
+                            <div class="p-info">
+                                <span class="p-icon">🧱</span>
+                                <div class="p-text">
+                                    <strong>3. Bollinger Band (20,2) Extreme Zone</strong>
+                                    <small id="pillarLevelDesc">Validating upper/lower outer band pierce</small>
+                                </div>
+                            </div>
+                            <span class="p-status" id="pillarLevelStatus">Checking...</span>
+                        </div>
+
+                        <div class="pillar-row" id="pillarRsi">
+                            <div class="p-info">
+                                <span class="p-icon">⚡</span>
+                                <div class="p-text">
+                                    <strong>4. Institutional RSI (14) Climax</strong>
+                                    <small id="pillarRsiDesc">Deep Overbought (>80) / Oversold (<20)</small>
+                                </div>
+                            </div>
+                            <span class="p-status" id="pillarRsiStatus">Checking...</span>
+                        </div>
+
+                        <div class="pillar-row" id="pillarPattern">
+                            <div class="p-info">
+                                <span class="p-icon">🕯️</span>
+                                <div class="p-text">
+                                    <strong>5. Long Rejection Wick (Pinbar/Wick >= 35%)</strong>
+                                    <small id="pillarPatternDesc">Hammer / Shooting Star / Rejection Confirmation</small>
+                                </div>
+                            </div>
+                            <span class="p-status" id="pillarPatternStatus">Checking...</span>
+                        </div>
+
+                        <div class="pillar-row" id="pillarTiming">
+                            <div class="p-info">
+                                <span class="p-icon">⏱️</span>
+                                <div class="p-text">
+                                    <strong>6. Precision 00:00 Candle Open Sync</strong>
+                                    <small id="pillarTimingDesc">Synchronized for next candle opening</small>
+                                </div>
+                            </div>
+                            <span class="p-status" id="pillarTimingStatus">Synchronizing...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pro Audio & Voice Settings -->
+                <div class="panel-card settings-panel">
+                    <div class="card-header">
+                        <h3><span class="header-icon">🔊</span> Voice & Sound Settings</h3>
+                    </div>
+
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label for="sniperModeToggle">🎯 Sniper 99% Zero-Fakeout Mode:</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="sniperModeToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label for="tradeLockToggle">Trade Lock (1 Trade At A Time):</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="tradeLockToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label for="otcFilterToggle">OTC Anti-Spike Trap Filter:</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="otcFilterToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label for="roundNumberFilterToggle">Round Number S/R Filter:</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="roundNumberFilterToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label for="desktopNotificationToggle">🖥️ Desktop / OS Push Notification:</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="desktopNotificationToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label for="voiceEnabledToggle">Voice Speech (குரல் அறிவிப்பு):</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="voiceEnabledToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label for="chimeEnabledToggle">Laser Audio Chimes:</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="chimeEnabledToggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="setting-item">
+                            <label for="voiceLanguage">Voice Language:</label>
+                            <select id="voiceLanguage" class="styled-select-sm">
+                                <option value="ta" selected>Tamil / Tanglish (தமிழ்)</option>
+                                <option value="en">English (Ultra Clear)</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item">
+                            <label for="cooldownSecSelect">Post-Trade Cooldown:</label>
+                            <select id="cooldownSecSelect" class="styled-select-sm">
+                                <option value="10">10 Seconds</option>
+                                <option value="15" selected>15 Seconds</option>
+                                <option value="30">30 Seconds</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-item col-full">
+                            <div class="slider-header">
+                                <label for="confidenceThreshold">Min Signal Confidence:</label>
+                                <span class="slider-num" id="thresholdValueDisplay">90%</span>
+                            </div>
+                            <input type="range" id="confidenceThreshold" min="80" max="99" value="90" step="1" class="pro-slider">
+                        </div>
+
+                        <div class="setting-actions col-full">
+                            <button id="testAudioBtn" class="btn btn-outline-wide">
+                                🔊 Test Voice & Chime Alert
+                            </button>
+                            <button id="testNotificationBtn" class="btn btn-outline-wide" style="margin-top: 8px;">
+                                🔔 Test Side & Desktop Notification
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Signal History Log -->
+                <div class="panel-card log-panel">
+                    <div class="card-header">
+                        <h3><span class="header-icon">📋</span> Signal Performance Log</h3>
+                        <button id="clearHistoryBtn" class="btn-text">Clear</button>
+                    </div>
+                    <div class="history-list" id="historyList">
+                        <div class="history-empty">No trading signals triggered yet. Monitoring chart...</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Floating Live Side Notification Toast Container -->
+    <div id="sideToastContainer" class="side-toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

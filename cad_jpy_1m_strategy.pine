@@ -1,0 +1,128 @@
+//@version=5
+strategy("CAD/JPY 1-Min AI Confluence Scalping Strategy", shorttitle="CADJPY 1M AI Scalper", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=10, commission_type=strategy.commission.percent, commission_value=0.01)
+
+// ==========================================
+// 1. INPUT SETTINGS & PARAMETERS
+// ==========================================
+// --- EMA Settings ---
+grp_ema = "EMA Settings"
+fastEmaLen  = input.int(9, title="Fast EMA Length", minval=1, group=grp_ema)
+slowEmaLen  = input.int(21, title="Slow EMA Length", minval=1, group=grp_ema)
+
+// --- RSI Settings ---
+grp_rsi = "RSI Settings"
+rsiLen      = input.int(14, title="RSI Length", minval=1, group=grp_rsi)
+rsiOversold = input.int(30, title="RSI Oversold Level (Buy Zone)", minval=1, maxval=50, group=grp_rsi)
+rsiOverbought = input.int(70, title="RSI Overbought Level (Sell Zone)", minval=50, maxval=99, group=grp_rsi)
+rsiLookback = input.int(5, title="RSI Trigger Lookback (Bars)", minval=1, maxval=20, tooltip="Check if RSI was oversold/overbought within recent bars", group=grp_rsi)
+
+// --- Support & Resistance (Pivot Points) ---
+grp_sr = "Support & Resistance Settings"
+pivotLeft   = input.int(5, title="Pivot Lookback Left Bars", minval=1, group=grp_sr)
+pivotRight  = input.int(5, title="Pivot Lookback Right Bars", minval=1, group=grp_sr)
+useSrFilter = input.bool(true, title="Enable S/R Trend & Bounce Filter", group=grp_sr)
+
+// --- Risk Management & Execution ---
+grp_risk = "Risk Management (TP / SL)"
+useAtrSl    = input.bool(true, title="Use ATR for Dynamic Stop Loss", group=grp_risk)
+atrLen      = input.int(14, title="ATR Length", group=grp_risk)
+atrSlMult   = input.float(1.5, title="ATR Stop Loss Multiplier", step=0.1, group=grp_risk)
+rrRatio     = input.float(1.5, title="Risk-to-Reward Ratio (TP = SL * RR)", step=0.1, group=grp_risk)
+fixedSlPips = input.float(6.0, title="Fixed SL in Pips (if ATR disabled)", step=0.5, group=grp_risk)
+
+// ==========================================
+// 2. INDICATOR CALCULATIONS
+// ==========================================
+// EMAs
+fastEma = ta.ema(close, fastEmaLen)
+slowEma = ta.ema(close, slowEmaLen)
+
+// RSI
+rsiValue = ta.rsi(close, rsiLen)
+
+// ATR
+atrValue = ta.atr(atrLen)
+pipSize  = syminfo.mintick * 10 // Pip equivalent for JPY pairs (0.01)
+
+// Dynamic Support & Resistance based on Pivots
+pHigh = ta.pivothigh(high, pivotLeft, pivotRight)
+pLow  = ta.pivotlow(low, pivotLeft, pivotRight)
+
+var float resLevel = na
+var float supLevel = na
+
+if not na(pHigh)
+    resLevel := pHigh
+
+if not na(pLow)
+    supLevel := pLow
+
+// ==========================================
+// 3. CONFLUENCE SIGNAL LOGIC
+// ==========================================
+// 1. EMA Crossovers
+emaBullishCross = ta.crossover(fastEma, slowEma)
+emaBearishCross = ta.crossunder(fastEma, slowEma)
+
+// 2. RSI Conditions (Oversold recovery for Buy / Overbought reversal for Sell)
+rsiWasOversold   = ta.lowest(rsiValue, rsiLookback) <= rsiOversold
+rsiWasOverbought = ta.highest(rsiValue, rsiLookback) >= rsiOverbought
+rsiBuyValid      = (rsiValue <= rsiOversold) or (rsiWasOversold and rsiValue > rsiOversold and rsiValue < 60)
+rsiSellValid     = (rsiValue >= rsiOverbought) or (rsiWasOverbought and rsiValue < rsiOverbought and rsiValue > 40)
+
+// 3. Support / Resistance Confluence
+// For Buy: Price bounced near support or is above current support level
+supBounceValid   = not useSrFilter or (na(supLevel) or (close >= supLevel and low <= supLevel + (atrValue * 1.2)))
+// For Sell: Price rejected near resistance or is below current resistance level
+resRejectValid   = not useSrFilter or (na(resLevel) or (close <= resLevel and high >= resLevel - (atrValue * 1.2)))
+
+// Combined Trigger Conditions
+buyCondition  = emaBullishCross and rsiBuyValid and supBounceValid
+sellCondition = emaBearishCross and rsiSellValid and resRejectValid
+
+// ==========================================
+// 4. PLOTS & VISUAL ANNOTATIONS
+// ==========================================
+// Plot EMAs
+plot(fastEma, title="EMA 9 (Fast)", color=color.new(#00E5FF, 0), linewidth=2)
+plot(slowEma, title="EMA 21 (Slow)", color=color.new(#FF9100, 0), linewidth=2)
+
+// Plot Support & Resistance Levels
+plot(resLevel, title="Resistance Level", color=color.new(#FF1744, 20), linewidth=1, style=plot.style_linebr)
+plot(supLevel, title="Support Level", color=color.new(#00E676, 20), linewidth=1, style=plot.style_linebr)
+
+// Plot Buy / Sell Arrows on Chart
+plotshape(buyCondition, title="BUY Signal Arrow", style=shape.triangleup, location=location.belowbar, color=color.new(#00E676, 0), size=size.normal, text="BUY", textcolor=color.white)
+plotshape(sellCondition, title="SELL Signal Arrow", style=shape.triangledown, location=location.abovebar, color=color.new(#FF1744, 0), size=size.normal, text="SELL", textcolor=color.white)
+
+// Background highlight on signal
+bgcolor(buyCondition ? color.new(#00E676, 88) : sellCondition ? color.new(#FF1744, 88) : na, title="Signal Background Highlight")
+
+// ==========================================
+// 5. STRATEGY EXECUTION & RISK MANAGEMENT
+// ==========================================
+var float longSlPrice  = na
+var float longTpPrice  = na
+var float shortSlPrice = na
+var float shortTpPrice = na
+
+slDistance = useAtrSl ? (atrValue * atrSlMult) : (fixedSlPips * pipSize)
+tpDistance = slDistance * rrRatio
+
+if buyCondition
+    longSlPrice := close - slDistance
+    longTpPrice := close + tpDistance
+    strategy.entry("AI_Long", strategy.long, comment="BUY [EMA+RSI+Sup]")
+    strategy.exit("Exit_Long", from_entry="AI_Long", stop=longSlPrice, limit=longTpPrice, comment_loss="SL Hit", comment_profit="TP Hit")
+
+if sellCondition
+    shortSlPrice := close + slDistance
+    shortTpPrice := close - tpDistance
+    strategy.entry("AI_Short", strategy.short, comment="SELL [EMA+RSI+Res]")
+    strategy.exit("Exit_Short", from_entry="AI_Short", stop=shortSlPrice, limit=shortTpPrice, comment_loss="SL Hit", comment_profit="TP Hit")
+
+// ==========================================
+// 6. TRADINGVIEW WEBHOOK / ALERT CONDITIONS
+// ==========================================
+alertcondition(buyCondition, title="CADJPY 1M BUY Alert", message="CAD/JPY 1-MIN BUY SIGNAL! EMA 9/21 Bullish Cross + RSI in Buy Zone + Support Confirmed @ {{close}}")
+alertcondition(sellCondition, title="CADJPY 1M SELL Alert", message="CAD/JPY 1-MIN SELL SIGNAL! EMA 9/21 Bearish Cross + RSI in Sell Zone + Resistance Confirmed @ {{close}}")
