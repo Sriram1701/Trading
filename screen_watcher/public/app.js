@@ -9,6 +9,7 @@ const startStreamBtn = document.getElementById('startStreamBtn');
 const stopStreamBtn = document.getElementById('stopStreamBtn');
 const selectRoiBtn = document.getElementById('selectRoiBtn');
 const resetRoiBtn = document.getElementById('resetRoiBtn');
+const mediaSourceSelect = document.getElementById('mediaSourceSelect');
 const strategyModeSelect = document.getElementById('strategyModeSelect');
 const expiryTimeframeSelect = document.getElementById('expiryTimeframeSelect');
 const tfPillGroup = document.getElementById('tfPillGroup');
@@ -110,6 +111,7 @@ let scanInterval = null;
 let audioCtx = null;
 let customRoi = null; // { x, y, width, height } in percentage
 let isSelectingRoi = false;
+let wakeLock = null;
 
 let sessionStats = {
     totalSignals: 0,
@@ -347,19 +349,68 @@ if (testNotificationBtn) {
 }
 
 // --------------------------------------------------------------------------
-// 4. Screen Capture & Stream Setup
+// 4. Screen / Mobile Camera Capture & Stream Setup
 // --------------------------------------------------------------------------
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('Mobile Screen WakeLock active!');
+        }
+    } catch (e) {
+        console.warn('Wake Lock error:', e);
+    }
+}
+
+function releaseWakeLock() {
+    if (wakeLock) {
+        wakeLock.release().then(() => { wakeLock = null; });
+    }
+}
+
 startStreamBtn.addEventListener('click', async () => {
     try {
         initAudio();
         requestDesktopNotificationPermission();
-        mediaStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-                displaySurface: 'browser',
-                frameRate: { max: 30 }
-            },
-            audio: false
-        });
+        await requestWakeLock();
+
+        const selectedSource = mediaSourceSelect ? mediaSourceSelect.value : 'screen';
+
+        if (selectedSource === 'back-cam') {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            });
+        } else if (selectedSource === 'front-cam') {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            });
+        } else {
+            // Default Screen Share with Mobile Fallback
+            if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+                try {
+                    mediaStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { displaySurface: 'browser', frameRate: { max: 30 } },
+                        audio: false
+                    });
+                } catch (displayErr) {
+                    console.warn('getDisplayMedia failed, falling back to mobile camera:', displayErr);
+                    mediaStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: 'environment' } },
+                        audio: false
+                    });
+                    if (mediaSourceSelect) mediaSourceSelect.value = 'back-cam';
+                }
+            } else {
+                // Mobile browser without getDisplayMedia support
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                    audio: false
+                });
+                if (mediaSourceSelect) mediaSourceSelect.value = 'back-cam';
+            }
+        }
 
         quotexVideo.srcObject = mediaStream;
         streamPlaceholder.style.display = 'none';
@@ -384,12 +435,13 @@ startStreamBtn.addEventListener('click', async () => {
         scanInterval = setInterval(runComputerVisionScan, 700);
 
     } catch (err) {
-        console.error('Screen capture error:', err);
-        alert('Could not start screen capture: ' + err.message);
+        console.error('Video capture error:', err);
+        alert('Could not start video stream: ' + err.message + '\n\nMobile Tip: If opening via Wi-Fi IP, ensure browser camera permissions are granted.');
     }
 });
 
 function stopStream() {
+    releaseWakeLock();
     if (mediaStream) {
         mediaStream.getTracks().forEach(t => t.stop());
         mediaStream = null;
@@ -1356,7 +1408,7 @@ clearHistoryBtn.addEventListener('click', () => {
 });
 
 // --------------------------------------------------------------------------
-// 8. Interactive ROI Box Selection
+// 8. Interactive ROI Box Selection & Mobile Touch Drag Support
 // --------------------------------------------------------------------------
 selectRoiBtn.addEventListener('click', () => {
     isSelectingRoi = true;
@@ -1366,11 +1418,66 @@ selectRoiBtn.addEventListener('click', () => {
     cropBox.style.width = '70%';
     cropBox.style.height = '70%';
     customRoi = { x: 0.15, y: 0.15, w: 0.70, h: 0.70 };
-    alert('Chart Scanning Box is now visible on screen! You can drag and resize it over your Quotex candles.');
+    alert('Chart Scanning Box is active! You can drag and resize it over your Quotex chart using mouse or touch.');
 });
 
 resetRoiBtn.addEventListener('click', () => {
     customRoi = null;
     cropBox.classList.add('hidden');
 });
+
+// Interactive Crop Box Mouse & Touch Dragging
+let isDraggingCrop = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let cropStartLeft = 0;
+let cropStartTop = 0;
+
+function handleDragStart(e) {
+    if (e.target.classList.contains('crop-handle')) return;
+    isDraggingCrop = true;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragStartX = clientX;
+    dragStartY = clientY;
+    const rect = cropBox.getBoundingClientRect();
+    const parentRect = viewportBox.getBoundingClientRect();
+    cropStartLeft = rect.left - parentRect.left;
+    cropStartTop = rect.top - parentRect.top;
+}
+
+function handleDragMove(e) {
+    if (!isDraggingCrop) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const deltaX = clientX - dragStartX;
+    const deltaY = clientY - dragStartY;
+    
+    const parentRect = viewportBox.getBoundingClientRect();
+    let newLeft = Math.max(0, Math.min(parentRect.width - cropBox.offsetWidth, cropStartLeft + deltaX));
+    let newTop = Math.max(0, Math.min(parentRect.height - cropBox.offsetHeight, cropStartTop + deltaY));
+
+    cropBox.style.left = `${(newLeft / parentRect.width) * 100}%`;
+    cropBox.style.top = `${(newTop / parentRect.height) * 100}%`;
+
+    customRoi = {
+        x: newLeft / parentRect.width,
+        y: newTop / parentRect.height,
+        w: cropBox.offsetWidth / parentRect.width,
+        h: cropBox.offsetHeight / parentRect.height
+    };
+}
+
+function handleDragEnd() {
+    isDraggingCrop = false;
+}
+
+cropBox.addEventListener('mousedown', handleDragStart);
+window.addEventListener('mousemove', handleDragMove);
+window.addEventListener('mouseup', handleDragEnd);
+
+cropBox.addEventListener('touchstart', handleDragStart, { passive: true });
+window.addEventListener('touchmove', handleDragMove, { passive: true });
+window.addEventListener('touchend', handleDragEnd);
+
 

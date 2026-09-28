@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const PORT = 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -40,6 +41,24 @@ const server = http.createServer((req, res) => {
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`🚀 Quotex AI Live Screen Watcher running at http://localhost:${PORT}`);
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const net of interfaces[name]) {
+            if (net.family === 'IPv4' && !net.internal) {
+                return net.address;
+            }
+        }
+    }
+    return 'localhost';
+}
+
+server.listen(PORT, '0.0.0.0', () => {
+    const localIp = getLocalIp();
+    console.log(`\n======================================================`);
+    console.log(`🚀 Quotex AI Live Screen Watcher is Active!`);
+    console.log(`💻 Local Computer Link : http://localhost:${PORT}`);
+    console.log(`📱 Mobile Wi-Fi Link   : http://${localIp}:${PORT}`);
+    console.log(`======================================================\n`);
 });
+

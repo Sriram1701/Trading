@@ -2,7 +2,7 @@
 <html lang="ta">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Quotex AI Pro Copilot V2 - Advanced Screen Scanner & 90%+ Signal Engine</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -65,15 +65,22 @@
             <div class="stream-panel">
                 <div class="toolbar-card">
                     <div class="toolbar-left">
+                        <div class="control-group">
+                            <select id="mediaSourceSelect" class="styled-select highlight-select" title="Choose Video Input">
+                                <option value="screen" selected>💻 Desktop Screen Share</option>
+                                <option value="back-cam">📱 Mobile Rear Camera</option>
+                                <option value="front-cam">🤳 Mobile Front Camera</option>
+                            </select>
+                        </div>
                         <button id="startStreamBtn" class="btn btn-primary glow-cyan">
-                            <span class="icon">🎥</span> Start Screen Watcher
+                            <span class="icon">🎥</span> Start Watcher
                         </button>
                         <button id="stopStreamBtn" class="btn btn-danger" disabled>
                             <span class="icon">⏹</span> Stop
                         </button>
                         <div class="selector-dropdown-group">
                             <button id="selectRoiBtn" class="btn btn-secondary" title="Select specific area of chart to scan">
-                                <span class="icon">📐</span> Set Chart Box (ROI)
+                                <span class="icon">📐</span> Set Chart Box
                             </button>
                             <button id="resetRoiBtn" class="btn btn-outline-sm" title="Reset Selection">Reset</button>
                         </div>
