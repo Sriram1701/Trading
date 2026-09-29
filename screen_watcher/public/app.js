@@ -837,67 +837,72 @@ function evaluatePillars(metrics) {
     const selectedTf = expiryTimeframeSelect.value;
     const strategyMode = strategyModeSelect.value;
 
-    let passedCount = 0;
+    let callPillars = 0;
+    let putPillars = 0;
     let callScore = 30;
     let putScore = 30;
 
-    // 1. Trend & EMA Flow Alignment
+    // 1. Major Trend & EMA Flow Alignment (Symmetric)
     if (metrics.emaDirection === 'BULLISH' || metrics.greenRatio > 0.52) {
-        if (pillarTrend) { pillarTrend.className = 'pillar-row passed'; pillarTrendStatus.textContent = '🟢 Bullish Flow (EMA Aligned)'; }
         callScore += 30;
-        passedCount++;
+        callPillars++;
+        if (pillarTrend) { pillarTrend.className = 'pillar-row passed'; pillarTrendStatus.textContent = '🟢 Bullish Flow (EMA Aligned)'; }
     } else if (metrics.emaDirection === 'BEARISH' || metrics.redRatio > 0.52) {
-        if (pillarTrend) { pillarTrend.className = 'pillar-row passed'; pillarTrendStatus.textContent = '🔴 Bearish Flow (EMA Aligned)'; }
         putScore += 30;
-        passedCount++;
+        putPillars++;
+        if (pillarTrend) { pillarTrend.className = 'pillar-row passed'; pillarTrendStatus.textContent = '🔴 Bearish Flow (EMA Aligned)'; }
     } else {
-        if (pillarTrend) { pillarTrend.className = 'pillar-row'; pillarTrendStatus.textContent = '⚖️ Active Flow'; }
         callScore += 15;
         putScore += 15;
+        if (pillarTrend) { pillarTrend.className = 'pillar-row'; pillarTrendStatus.textContent = '⚖️ Active Flow'; }
     }
 
-    // 2. Volatility Analysis
-    if (pillarSqueeze) { pillarSqueeze.className = 'pillar-row passed'; pillarSqueezeStatus.textContent = '✅ Volatility Active'; }
-    passedCount++;
+    // 2. Anti-Squeeze & Volatility Filter
+    callPillars++;
+    putPillars++;
     callScore += 10;
     putScore += 10;
+    if (pillarSqueeze) { pillarSqueeze.className = 'pillar-row passed'; pillarSqueezeStatus.textContent = '✅ Volatility Active'; }
 
-    // 3. Bollinger Band Positioning
+    // 3. Bollinger Band Extremes (Symmetric)
     if (metrics.bbTouchType === 'LOWER') {
-        if (pillarLevel) { pillarLevel.className = 'pillar-row passed'; pillarLevelStatus.textContent = '🟢 Lower Band Bounce'; }
-        passedCount++;
+        callPillars++;
         callScore += 25;
+        if (pillarLevel) { pillarLevel.className = 'pillar-row passed'; pillarLevelStatus.textContent = '🟢 Lower Band Bounce'; }
     } else if (metrics.bbTouchType === 'UPPER') {
-        if (pillarLevel) { pillarLevel.className = 'pillar-row passed'; pillarLevelStatus.textContent = '🔴 Upper Band Reject'; }
-        passedCount++;
+        putPillars++;
         putScore += 25;
+        if (pillarLevel) { pillarLevel.className = 'pillar-row passed'; pillarLevelStatus.textContent = '🔴 Upper Band Reject'; }
     } else {
         if (pillarLevel) { pillarLevel.className = 'pillar-row'; pillarLevelStatus.textContent = 'Band Flow Normal'; }
     }
 
-    // 4. RSI (14) Momentum
+    // 4. Institutional RSI (14) Momentum (Symmetric)
     if (metrics.rsiTouched20 || metrics.estimatedRsi <= 40) {
-        if (pillarRsi) { pillarRsi.className = 'pillar-row passed'; pillarRsiStatus.textContent = `🔥 RSI ${metrics.estimatedRsi} Bullish Zone`; }
-        passedCount++;
+        callPillars++;
         callScore += 25;
+        if (pillarRsi) { pillarRsi.className = 'pillar-row passed'; pillarRsiStatus.textContent = `🔥 RSI ${metrics.estimatedRsi} Bullish Zone`; }
     } else if (metrics.rsiTouched85 || metrics.estimatedRsi >= 60) {
-        if (pillarRsi) { pillarRsi.className = 'pillar-row passed'; pillarRsiStatus.textContent = `🔥 RSI ${metrics.estimatedRsi} Bearish Zone`; }
-        passedCount++;
+        putPillars++;
         putScore += 25;
+        if (pillarRsi) { pillarRsi.className = 'pillar-row passed'; pillarRsiStatus.textContent = `🔥 RSI ${metrics.estimatedRsi} Bearish Zone`; }
     } else {
         if (pillarRsi) { pillarRsi.className = 'pillar-row'; pillarRsiStatus.textContent = `RSI ${metrics.estimatedRsi}`; }
     }
 
-    // 5. Candlestick Pattern & Rejection
+    // 5. Candlestick Pattern & Rejection (Symmetric)
     if (metrics.detectedPattern.bias === 'CALL' || metrics.detectedPattern.isHammer || metrics.greenRatio > 0.55) {
-        if (pillarPattern) { pillarPattern.className = 'pillar-row passed'; pillarPatternStatus.textContent = `🟢 ${metrics.detectedPattern.name}`; }
-        passedCount++;
+        callPillars++;
         callScore += 25;
-    } else if (metrics.detectedPattern.bias === 'PUT' || metrics.detectedPattern.isShootingStar || metrics.redRatio > 0.55) {
-        if (pillarPattern) { pillarPattern.className = 'pillar-row passed'; pillarPatternStatus.textContent = `🔴 ${metrics.detectedPattern.name}`; }
-        passedCount++;
+        if (pillarPattern) { pillarPattern.className = 'pillar-row passed'; pillarPatternStatus.textContent = `🟢 ${metrics.detectedPattern.name}`; }
+    } 
+    if (metrics.detectedPattern.bias === 'PUT' || metrics.detectedPattern.isShootingStar || metrics.redRatio > 0.55) {
+        putPillars++;
         putScore += 25;
+        if (pillarPattern) { pillarPattern.className = 'pillar-row passed'; pillarPatternStatus.textContent = `🔴 ${metrics.detectedPattern.name}`; }
     }
+
+    const passedCount = Math.max(callPillars, putPillars);
 
     // Determine Smart AI Expiry (Multi-Minute Trend Hold Protection)
     let finalExpiryKey = selectedTf;
