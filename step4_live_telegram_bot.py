@@ -18,7 +18,7 @@ Usage:
     uv run python step4_live_telegram_bot.py --test-alert
 
     # 2. Run Live Real-Time Bot:
-    uv run python step4_live_telegram_bot.py --model cad_jpy_model.joblib --threshold 0.80
+    uv run python step4_live_telegram_bot.py --model cad_jpy_model.joblib --threshold 0.82
 
     # 3. Dry-Run Mode (Console only without Telegram dispatch):
     uv run python step4_live_telegram_bot.py --dry-run
@@ -321,7 +321,7 @@ def run_bot(model_path: str, bot_token: str, chat_id: str, threshold: float, sym
 def main():
     parser = argparse.ArgumentParser(description="CAD/JPY Live Telegram Alert Bot")
     parser.add_argument("--model", type=str, default="cad_jpy_model.joblib", help="Path to trained joblib model")
-    parser.add_argument("--threshold", type=float, default=float(os.getenv("PROBABILITY_THRESHOLD", "0.80")), help="Confidence threshold (e.g. 0.80 for 80%%)")
+    parser.add_argument("--threshold", type=float, default=float(os.getenv("PROBABILITY_THRESHOLD", "0.82")), help="Confidence threshold (e.g. 0.82 for 82%%)")
     parser.add_argument("--symbol", type=str, default=os.getenv("SYMBOL", "CADJPY=X"), help="Ticker symbol")
     parser.add_argument("--token", type=str, default=os.getenv("TELEGRAM_BOT_TOKEN", ""), help="Telegram Bot Token")
     parser.add_argument("--chat-id", type=str, default=os.getenv("TELEGRAM_CHAT_ID", ""), help="Telegram Chat ID")

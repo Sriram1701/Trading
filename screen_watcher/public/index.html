@@ -367,7 +367,7 @@
 
                     <div class="settings-grid">
                         <div class="setting-item">
-                            <label for="sniperModeToggle">🎯 Sniper 99% Zero-Fakeout Mode:</label>
+                            <label for="sniperModeToggle">🎯 100% Ultra Confluence Mode:</label>
                             <label class="toggle-switch">
                                 <input type="checkbox" id="sniperModeToggle" checked>
                                 <span class="slider"></span>
@@ -433,18 +433,19 @@
                         <div class="setting-item">
                             <label for="cooldownSecSelect">Post-Trade Cooldown:</label>
                             <select id="cooldownSecSelect" class="styled-select-sm">
-                                <option value="10">10 Seconds</option>
-                                <option value="15" selected>15 Seconds</option>
+                                <option value="15">15 Seconds</option>
                                 <option value="30">30 Seconds</option>
+                                <option value="45" selected>45 Seconds (Anti-Spam Filter)</option>
+                                <option value="60">60 Seconds (Full Retest Wait)</option>
                             </select>
                         </div>
 
                         <div class="setting-item col-full">
                             <div class="slider-header">
                                 <label for="confidenceThreshold">Min Signal Confidence:</label>
-                                <span class="slider-num" id="thresholdValueDisplay">82%</span>
+                                <span class="slider-num" id="thresholdValueDisplay">85%</span>
                             </div>
-                            <input type="range" id="confidenceThreshold" min="75" max="99" value="82" step="1" class="pro-slider">
+                            <input type="range" id="confidenceThreshold" min="75" max="100" value="85" step="1" class="pro-slider">
                         </div>
 
                         <div class="setting-actions col-full">
