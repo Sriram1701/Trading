@@ -135,16 +135,17 @@ let frameConfirmation = {
 
 // Timeframe Metadata Dictionary
 const TIMEFRAME_INFO = {
-    'auto': { label: 'Auto (5s - 5m)', nameEn: 'AI Optimal Expiry', nameTa: 'AI உகந்த நேரம்', sec: 60 },
-    '5s':   { label: '5s Turbo',       nameEn: '5 Seconds',         nameTa: '5 வினாடிகள்',     sec: 5 },
-    '10s':  { label: '10s Fast',      nameEn: '10 Seconds',        nameTa: '10 வினாடிகள்',    sec: 10 },
-    '15s':  { label: '15s Scalp',     nameEn: '15 Seconds',        nameTa: '15 வினாடிகள்',    sec: 15 },
-    '30s':  { label: '30s Scalp',     nameEn: '30 Seconds',        nameTa: '30 வினாடிகள்',    sec: 30 },
-    '45s':  { label: '45s Scalp',     nameEn: '45 Seconds',        nameTa: '45 வினாடிகள்',    sec: 45 },
-    '1m':   { label: '1 Min',         nameEn: '1 Minute',          nameTa: '1 நிமிடம்',       sec: 60 },
-    '2m':   { label: '2 Min',         nameEn: '2 Minutes',         nameTa: '2 நிமிடங்கள்',    sec: 120 },
-    '3m':   { label: '3 Min',         nameEn: '3 Minutes',         nameTa: '3 நிமிடங்கள்',    sec: 180 },
-    '5m':   { label: '5 Min Trend',    nameEn: '5 Minutes',         nameTa: '5 நிமிடங்கள்',    sec: 300 }
+    'auto':  { label: 'Auto (5s - 5m)', nameEn: 'AI Optimal Expiry', nameTa: 'AI உகந்த நேரம்', sec: 60 },
+    '5s':    { label: '5s Turbo',       nameEn: '5 Seconds',         nameTa: '5 வினாடிகள்',     sec: 5 },
+    '10s':   { label: '10s Fast',      nameEn: '10 Seconds',        nameTa: '10 வினாடிகள்',    sec: 10 },
+    '15s':   { label: '15s Scalp',     nameEn: '15 Seconds',        nameTa: '15 வினாடிகள்',    sec: 15 },
+    '30s':   { label: '30s Scalp',     nameEn: '30 Seconds',        nameTa: '30 வினாடிகள்',    sec: 30 },
+    '45s':   { label: '45s Scalp',     nameEn: '45 Seconds',        nameTa: '45 வினாடிகள்',    sec: 45 },
+    '1m':    { label: '1 Min',         nameEn: '1 Minute',          nameTa: '1 நிமிடம்',       sec: 60 },
+    '1m30s': { label: '1m 30s',        nameEn: '1 Minute 30 Secs',  nameTa: '1 நிமிடம் 30 வினாடிகள்', sec: 90 },
+    '2m':    { label: '2 Min',         nameEn: '2 Minutes',         nameTa: '2 நிமிடங்கள்',    sec: 120 },
+    '3m':    { label: '3 Min',         nameEn: '3 Minutes',         nameTa: '3 நிமிடங்கள்',    sec: 180 },
+    '5m':    { label: '5 Min Trend',    nameEn: '5 Minutes',         nameTa: '5 நிமிடங்கள்',    sec: 300 }
 };
 
 // --------------------------------------------------------------------------
