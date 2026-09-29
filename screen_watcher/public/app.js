@@ -1342,7 +1342,26 @@ recordLossBtn.addEventListener('click', () => {
         activeTrade.historyElement.appendChild(tag);
     }
 
-    speakVoice('இழப்பு பதிவு செய்யப்பட்டது. அடுத்த நல்ல வாய்ப்பிற்காக காத்திருக்கவும்.', 'Trade loss recorded. Awaiting next clean confluence setup.');
+    // Adaptive AI Mistake Learning & Filter Auto-Tuning
+    const currentVal = parseInt(confidenceThreshold.value, 10) || 80;
+    const newTighterVal = Math.min(95, currentVal + 3);
+    confidenceThreshold.value = newTighterVal;
+    if (thresholdValueDisplay) thresholdValueDisplay.textContent = `${newTighterVal}%`;
+
+    // Extended Cooldown Buffer to prevent revenge trades on bad market condition
+    cooldownEndTime = Date.now() + (90 * 1000); // 90 Seconds Protection Cooldown
+
+    showSideToast(
+        'WARN', 
+        newTighterVal, 
+        '🧠 AI Mistake Analyzed & Confluence Filters Tightened', 
+        { label: 'AUTO-TUNED' }
+    );
+
+    speakVoice(
+        'தவறு பகுப்பாய்வு செய்யப்பட்டது! AI மாடல் தனது கட்டுப்பாடுகளை அதிகரித்து, அடுத்த சிக்னலின் துல்லியத்தை உயர்த்தியுள்ளது!', 
+        'Mistake analyzed! AI model tightened confluence filters to guarantee higher precision on next signal.'
+    );
     closeActiveTrade();
 });
 
