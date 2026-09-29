@@ -109,15 +109,35 @@ def compute_live_features(df: pd.DataFrame) -> pd.DataFrame:
     """Calculates all features identical to training pipeline on the latest stream."""
     data = df.copy()
     
-    # 1. EMAs
+    # 1. EMAs (EMA 9, EMA 21, EMA 200 Major Trend Filter)
     data["ema_9"] = data["close"].ewm(span=9, adjust=False).mean()
     data["ema_21"] = data["close"].ewm(span=21, adjust=False).mean()
+    data["ema_200"] = data["close"].ewm(span=200, adjust=False).mean()
     data["ema_diff"] = data["ema_9"] - data["ema_21"]
     data["ema_cross_bull"] = ((data["ema_9"] > data["ema_21"]) & (data["ema_9"].shift(1) <= data["ema_21"].shift(1))).astype(int)
     data["ema_cross_bear"] = ((data["ema_9"] < data["ema_21"]) & (data["ema_9"].shift(1) >= data["ema_21"].shift(1))).astype(int)
     data["ema_trend"] = (data["ema_9"] > data["ema_21"]).astype(int)
+    data["major_trend_bull"] = (data["close"] > data["ema_200"]).astype(int)
 
-    # 2. RSI (14)
+    # 2. ADX (14) Trend Strength Filter
+    high_diff = data["high"].diff()
+    low_diff = -data["low"].diff()
+    plus_dm = np.where((high_diff > low_diff) & (high_diff > 0), high_diff, 0.0)
+    minus_dm = np.where((low_diff > high_diff) & (low_diff > 0), low_diff, 0.0)
+    
+    tr1 = data["high"] - data["low"]
+    tr2 = (data["high"] - data["close"].shift(1)).abs()
+    tr3 = (data["low"] - data["close"].shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    tr_smooth = pd.Series(tr).ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+    plus_di = 100 * pd.Series(plus_dm).ewm(alpha=1/14, min_periods=14, adjust=False).mean() / (tr_smooth + 1e-9)
+    minus_di = 100 * pd.Series(minus_dm).ewm(alpha=1/14, min_periods=14, adjust=False).mean() / (tr_smooth + 1e-9)
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
+    data["adx_14"] = dx.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+    data["adx_strong_trend"] = (data["adx_14"] >= 25).astype(int)
+
+    # 3. RSI (14)
     delta = data["close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -128,14 +148,14 @@ def compute_live_features(df: pd.DataFrame) -> pd.DataFrame:
     data["rsi_oversold"] = (data["rsi_14"] < 30).astype(int)
     data["rsi_overbought"] = (data["rsi_14"] > 70).astype(int)
 
-    # 3. MACD
+    # 4. MACD
     ema_12 = data["close"].ewm(span=12, adjust=False).mean()
     ema_26 = data["close"].ewm(span=26, adjust=False).mean()
     data["macd_line"] = ema_12 - ema_26
     data["macd_signal"] = data["macd_line"].ewm(span=9, adjust=False).mean()
     data["macd_hist"] = data["macd_line"] - data["macd_signal"]
 
-    # 4. Bollinger Bands
+    # 5. Bollinger Bands
     bb_mean = data["close"].rolling(window=20).mean()
     bb_std = data["close"].rolling(window=20).std()
     data["bb_middle"] = bb_mean
@@ -144,12 +164,9 @@ def compute_live_features(df: pd.DataFrame) -> pd.DataFrame:
     data["bb_bandwidth"] = (data["bb_upper"] - data["bb_lower"]) / (bb_mean + 1e-9)
     data["bb_pct_b"] = (data["close"] - data["bb_lower"]) / (data["bb_upper"] - data["bb_lower"] + 1e-9)
 
-    # 5. ATR (14)
-    high_low = data["high"] - data["low"]
-    high_close = (data["high"] - data["close"].shift(1)).abs()
-    low_close = (data["low"] - data["close"].shift(1)).abs()
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    data["atr_14"] = tr.rolling(window=14).mean()
+    # 6. ATR (14)
+    data["atr_14"] = tr_smooth
+
 
     # 6. Returns & Candle Body
     data["return_1m"] = data["close"].pct_change()

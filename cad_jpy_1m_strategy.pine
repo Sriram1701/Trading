@@ -1,84 +1,87 @@
 //@version=5
-strategy("CAD/JPY 1-Min AI Confluence Scalping Strategy", shorttitle="CADJPY 1M AI Scalper", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=10, commission_type=strategy.commission.percent, commission_value=0.01)
+strategy("Quotex AI 6-Pillar Confluence Scalping Strategy", shorttitle="Quotex AI 6-Pillar Scalper", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=10, commission_type=strategy.commission.percent, commission_value=0.01)
 
 // ==========================================
 // 1. INPUT SETTINGS & PARAMETERS
 // ==========================================
 // --- EMA Settings ---
-grp_ema = "EMA Settings"
+grp_ema     = "EMA Settings"
 fastEmaLen  = input.int(9, title="Fast EMA Length", minval=1, group=grp_ema)
 slowEmaLen  = input.int(21, title="Slow EMA Length", minval=1, group=grp_ema)
+trendEmaLen = input.int(200, title="Major Trend EMA Length", minval=1, group=grp_ema)
+
+// --- ADX Settings ---
+grp_adx     = "ADX Settings (Trend Strength Filter)"
+adxLen      = input.int(14, title="ADX Smoothing Length", minval=1, group=grp_adx)
+diLen       = input.int(14, title="DI Length", minval=1, group=grp_adx)
+adxThresh   = input.int(25, title="Minimum ADX Threshold (Avoid Sideways)", minval=10, maxval=50, group=grp_adx)
+
+// --- Bollinger Bands Settings ---
+grp_bb      = "Bollinger Bands Settings"
+bbLen       = input.int(20, title="Bollinger Bands Length", minval=1, group=grp_bb)
+bbMult      = input.float(2.0, title="Bollinger Bands StdDev", minval=0.5, step=0.1, group=grp_bb)
 
 // --- RSI Settings ---
-grp_rsi = "RSI Settings"
+grp_rsi     = "RSI Settings"
 rsiLen      = input.int(14, title="RSI Length", minval=1, group=grp_rsi)
 rsiOversold = input.int(30, title="RSI Oversold Level (Buy Zone)", minval=1, maxval=50, group=grp_rsi)
 rsiOverbought = input.int(70, title="RSI Overbought Level (Sell Zone)", minval=50, maxval=99, group=grp_rsi)
-rsiLookback = input.int(5, title="RSI Trigger Lookback (Bars)", minval=1, maxval=20, tooltip="Check if RSI was oversold/overbought within recent bars", group=grp_rsi)
-
-// --- Support & Resistance (Pivot Points) ---
-grp_sr = "Support & Resistance Settings"
-pivotLeft   = input.int(5, title="Pivot Lookback Left Bars", minval=1, group=grp_sr)
-pivotRight  = input.int(5, title="Pivot Lookback Right Bars", minval=1, group=grp_sr)
-useSrFilter = input.bool(true, title="Enable S/R Trend & Bounce Filter", group=grp_sr)
+rsiLookback = input.int(5, title="RSI Trigger Lookback (Bars)", minval=1, maxval=20, group=grp_rsi)
 
 // --- Risk Management & Execution ---
-grp_risk = "Risk Management (TP / SL)"
+grp_risk    = "Risk Management (TP / SL)"
 useAtrSl    = input.bool(true, title="Use ATR for Dynamic Stop Loss", group=grp_risk)
 atrLen      = input.int(14, title="ATR Length", group=grp_risk)
 atrSlMult   = input.float(1.5, title="ATR Stop Loss Multiplier", step=0.1, group=grp_risk)
 rrRatio     = input.float(1.5, title="Risk-to-Reward Ratio (TP = SL * RR)", step=0.1, group=grp_risk)
-fixedSlPips = input.float(6.0, title="Fixed SL in Pips (if ATR disabled)", step=0.5, group=grp_risk)
 
 // ==========================================
 // 2. INDICATOR CALCULATIONS
 // ==========================================
 // EMAs
-fastEma = ta.ema(close, fastEmaLen)
-slowEma = ta.ema(close, slowEmaLen)
+fastEma  = ta.ema(close, fastEmaLen)
+slowEma  = ta.ema(close, slowEmaLen)
+trendEma = ta.ema(close, trendEmaLen)
 
-// RSI
+// ADX Calculation
+[plusDI, minusDI, adxValue] = ta.dmi(diLen, adxLen)
+
+// Bollinger Bands Calculation
+[bbMiddle, bbUpper, bbLower] = ta.bb(close, bbLen, bbMult)
+
+// RSI Calculation
 rsiValue = ta.rsi(close, rsiLen)
 
-// ATR
+// ATR Calculation
 atrValue = ta.atr(atrLen)
-pipSize  = syminfo.mintick * 10 // Pip equivalent for JPY pairs (0.01)
-
-// Dynamic Support & Resistance based on Pivots
-pHigh = ta.pivothigh(high, pivotLeft, pivotRight)
-pLow  = ta.pivotlow(low, pivotLeft, pivotRight)
-
-var float resLevel = na
-var float supLevel = na
-
-if not na(pHigh)
-    resLevel := pHigh
-
-if not na(pLow)
-    supLevel := pLow
 
 // ==========================================
-// 3. CONFLUENCE SIGNAL LOGIC
+// 3. STRICT 6-PILLAR CONFLUENCE LOGIC
 // ==========================================
-// 1. EMA Crossovers
-emaBullishCross = ta.crossover(fastEma, slowEma)
-emaBearishCross = ta.crossunder(fastEma, slowEma)
+// 1. Major Trend Filter (EMA 200)
+bullishTrend = close > trendEma
+bearishTrend = close < trendEma
 
-// 2. RSI Conditions (Oversold recovery for Buy / Overbought reversal for Sell)
+// 2. Trend Strength Filter (ADX > 25)
+strongTrend  = adxValue >= adxThresh
+
+// 3. EMA Crossover
+emaBullCross = ta.crossover(fastEma, slowEma) or (fastEma > slowEma and ta.crossover(close, fastEma))
+emaBearCross = ta.crossunder(fastEma, slowEma) or (fastEma < slowEma and ta.crossunder(close, fastEma))
+
+// 4. RSI Condition
 rsiWasOversold   = ta.lowest(rsiValue, rsiLookback) <= rsiOversold
 rsiWasOverbought = ta.highest(rsiValue, rsiLookback) >= rsiOverbought
-rsiBuyValid      = (rsiValue <= rsiOversold) or (rsiWasOversold and rsiValue > rsiOversold and rsiValue < 60)
-rsiSellValid     = (rsiValue >= rsiOverbought) or (rsiWasOverbought and rsiValue < rsiOverbought and rsiValue > 40)
+rsiBuyValid      = rsiValue <= 45 and (rsiWasOversold or rsiValue <= rsiOversold)
+rsiSellValid     = rsiValue >= 55 and (rsiWasOverbought or rsiValue >= rsiOverbought)
 
-// 3. Support / Resistance Confluence
-// For Buy: Price bounced near support or is above current support level
-supBounceValid   = not useSrFilter or (na(supLevel) or (close >= supLevel and low <= supLevel + (atrValue * 1.2)))
-// For Sell: Price rejected near resistance or is below current resistance level
-resRejectValid   = not useSrFilter or (na(resLevel) or (close <= resLevel and high >= resLevel - (atrValue * 1.2)))
+// 5. Bollinger Band Bounce / Rejection
+bbBuyValid  = low <= bbLower or close[1] <= bbLower
+bbSellValid = high >= bbUpper or close[1] >= bbUpper
 
-// Combined Trigger Conditions
-buyCondition  = emaBullishCross and rsiBuyValid and supBounceValid
-sellCondition = emaBearishCross and rsiSellValid and resRejectValid
+// Combined 6-Pillar Buy / Sell Conditions
+buyCondition  = bullishTrend and strongTrend and emaBullCross and rsiBuyValid and bbBuyValid
+sellCondition = bearishTrend and strongTrend and emaBearCross and rsiSellValid and bbSellValid
 
 // ==========================================
 // 4. PLOTS & VISUAL ANNOTATIONS
@@ -86,17 +89,19 @@ sellCondition = emaBearishCross and rsiSellValid and resRejectValid
 // Plot EMAs
 plot(fastEma, title="EMA 9 (Fast)", color=color.new(#00E5FF, 0), linewidth=2)
 plot(slowEma, title="EMA 21 (Slow)", color=color.new(#FF9100, 0), linewidth=2)
+plot(trendEma, title="EMA 200 (Major Trend)", color=color.new(#FF1744, 0), linewidth=3)
 
-// Plot Support & Resistance Levels
-plot(resLevel, title="Resistance Level", color=color.new(#FF1744, 20), linewidth=1, style=plot.style_linebr)
-plot(supLevel, title="Support Level", color=color.new(#00E676, 20), linewidth=1, style=plot.style_linebr)
+// Plot Bollinger Bands
+plot(bbUpper, title="Upper BB", color=color.new(#FF1744, 50), linewidth=1)
+plot(bbLower, title="Lower BB", color=color.new(#00E676, 50), linewidth=1)
+fill(plot(bbUpper), plot(bbLower), color=color.new(#00E5FF, 95), title="BB Channel Fill")
 
 // Plot Buy / Sell Arrows on Chart
-plotshape(buyCondition, title="BUY Signal Arrow", style=shape.triangleup, location=location.belowbar, color=color.new(#00E676, 0), size=size.normal, text="BUY", textcolor=color.white)
-plotshape(sellCondition, title="SELL Signal Arrow", style=shape.triangledown, location=location.abovebar, color=color.new(#FF1744, 0), size=size.normal, text="SELL", textcolor=color.white)
+plotshape(buyCondition, title="BUY Signal Arrow", style=shape.triangleup, location=location.belowbar, color=color.new(#00E676, 0), size=size.normal, text="BUY 90%+", textcolor=color.white)
+plotshape(sellCondition, title="SELL Signal Arrow", style=shape.triangledown, location=location.abovebar, color=color.new(#FF1744, 0), size=size.normal, text="SELL 90%+", textcolor=color.white)
 
 // Background highlight on signal
-bgcolor(buyCondition ? color.new(#00E676, 88) : sellCondition ? color.new(#FF1744, 88) : na, title="Signal Background Highlight")
+bgcolor(buyCondition ? color.new(#00E676, 85) : sellCondition ? color.new(#FF1744, 85) : na, title="Signal Background Highlight")
 
 // ==========================================
 // 5. STRATEGY EXECUTION & RISK MANAGEMENT
@@ -106,23 +111,24 @@ var float longTpPrice  = na
 var float shortSlPrice = na
 var float shortTpPrice = na
 
-slDistance = useAtrSl ? (atrValue * atrSlMult) : (fixedSlPips * pipSize)
+slDistance = atrValue * atrSlMult
 tpDistance = slDistance * rrRatio
 
 if buyCondition
     longSlPrice := close - slDistance
     longTpPrice := close + tpDistance
-    strategy.entry("AI_Long", strategy.long, comment="BUY [EMA+RSI+Sup]")
+    strategy.entry("AI_Long", strategy.long, comment="BUY [6-Pillar]")
     strategy.exit("Exit_Long", from_entry="AI_Long", stop=longSlPrice, limit=longTpPrice, comment_loss="SL Hit", comment_profit="TP Hit")
 
 if sellCondition
     shortSlPrice := close + slDistance
     shortTpPrice := close - tpDistance
-    strategy.entry("AI_Short", strategy.short, comment="SELL [EMA+RSI+Res]")
+    strategy.entry("AI_Short", strategy.short, comment="SELL [6-Pillar]")
     strategy.exit("Exit_Short", from_entry="AI_Short", stop=shortSlPrice, limit=shortTpPrice, comment_loss="SL Hit", comment_profit="TP Hit")
 
 // ==========================================
 // 6. TRADINGVIEW WEBHOOK / ALERT CONDITIONS
 // ==========================================
-alertcondition(buyCondition, title="CADJPY 1M BUY Alert", message="CAD/JPY 1-MIN BUY SIGNAL! EMA 9/21 Bullish Cross + RSI in Buy Zone + Support Confirmed @ {{close}}")
-alertcondition(sellCondition, title="CADJPY 1M SELL Alert", message="CAD/JPY 1-MIN SELL SIGNAL! EMA 9/21 Bearish Cross + RSI in Sell Zone + Resistance Confirmed @ {{close}}")
+alertcondition(buyCondition, title="Quotex AI BUY Alert", message="QUOTEX 90%+ BUY SIGNAL! EMA 200 Trend + ADX>25 + EMA 9/21 + RSI + BB Lower Bounce @ {{close}}")
+alertcondition(sellCondition, title="Quotex AI SELL Alert", message="QUOTEX 90%+ SELL SIGNAL! EMA 200 Trend + ADX>25 + EMA 9/21 + RSI + BB Upper Rejection @ {{close}}")
+
