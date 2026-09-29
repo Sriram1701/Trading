@@ -938,12 +938,16 @@ function evaluatePillars(metrics) {
     if (hudDetectedPattern) hudDetectedPattern.textContent = metrics.detectedPattern.name;
     if (hudRecommendedExpiry) hudRecommendedExpiry.textContent = expiryInfo.label;
 
-    let finalCallConfidence = Math.min(100, Math.max(50, callScore + (passedCount >= 5 ? 10 : 0)));
-    let finalPutConfidence = Math.min(100, Math.max(50, putScore + (passedCount >= 5 ? 10 : 0)));
+    let finalCallConfidence = Math.min(100, Math.max(50, callScore + (passedCount >= 4 ? 10 : 0)));
+    let finalPutConfidence = Math.min(100, Math.max(50, putScore + (passedCount >= 4 ? 10 : 0)));
 
     const nowTime = Date.now();
     const intervalKey = `${finalExpiryKey}_${Math.floor(nowTime / (totalSecs * 1000))}`;
-    const effectiveThreshold = Math.max(85, Math.min(95, minThreshold + 1)); // 100% Ultra Confluence Threshold
+    
+    // Dynamic Thresholds (Adapts to user confidence slider)
+    const effectiveThreshold = minThreshold;
+    const isSniperActive = sniperModeToggle ? sniperModeToggle.checked : true;
+    const minRequiredPillars = isSniperActive ? 4 : 3;
 
     const isStrongTrend = (metrics.emaDirection !== 'NEUTRAL' || metrics.greenRatio > 0.60 || metrics.redRatio > 0.60);
     const trendForecast = {
@@ -953,8 +957,8 @@ function evaluatePillars(metrics) {
         suggestedExpiries: isStrongTrend ? ["2m", "3m", "5m"] : ["1m", "2m"]
     };
 
-    // Ultra 100% Confirmed CALL (UP) Signal (Requires >=5 passed confluence pillars for 100% accuracy)
-    if (finalCallConfidence >= effectiveThreshold && finalCallConfidence > finalPutConfidence && passedCount >= 5) {
+    // Confirmed CALL (UP) Signal
+    if (finalCallConfidence >= effectiveThreshold && finalCallConfidence > finalPutConfidence && passedCount >= minRequiredPillars) {
         if (frameConfirmation.candidateType === 'CALL') {
             frameConfirmation.consecutiveFrames++;
         } else {
@@ -963,13 +967,13 @@ function evaluatePillars(metrics) {
 
         mainSignalHud.className = 'signal-hud-v2 call-active';
         hudActionIcon.textContent = '🚀';
-        hudSignalTitle.textContent = `🎯 100% CONFIRMED CALL (UP) • ${expiryInfo.label.toUpperCase()}`;
-        hudSignalReason.textContent = `Bullish Flow + RSI ${metrics.estimatedRsi} + ${metrics.detectedPattern.name} • 🌊 ${trendForecast.durationTextEn} (${passedCount}/6 Pillars • Conf: ${frameConfirmation.consecutiveFrames}/3 Frames)`;
-        hudConfidenceScore.textContent = `100%`;
+        hudSignalTitle.textContent = `🎯 CONFIRMED CALL (UP) • ${expiryInfo.label.toUpperCase()}`;
+        hudSignalReason.textContent = `Bullish Flow + RSI ${metrics.estimatedRsi} + ${metrics.detectedPattern.name} • 🌊 ${trendForecast.durationTextEn} (${passedCount}/6 Pillars Active)`;
+        hudConfidenceScore.textContent = `${finalCallConfidence}%`;
         hudActionTag.textContent = `BUY UP (${expiryInfo.label})`;
         hudActionTag.className = 'action-tag call';
 
-        // Pre-Alert Voice Warning with Multi-Minute Trend Guidance
+        // Pre-Alert Voice Warning in Tamil
         if (isPreAlertWindow && !preAlertGiven && lastTriggeredIntervalKey !== intervalKey) {
             preAlertGiven = true;
             playLaserChime('WARN');
@@ -980,21 +984,21 @@ function evaluatePillars(metrics) {
                 );
             } else {
                 speakVoice(
-                    `கவனிக்கவும்! 100% உறுதியான ${expiryInfo.nameTa} கால் சிக்னல் வரப்போகிறது!`,
-                    `Attention! 100% confirmed ${expiryInfo.nameEn} Call signal incoming!`
+                    `கவனிக்கவும்! உறுதியான ${expiryInfo.nameTa} கால் சிக்னல் வரப்போகிறது!`,
+                    `Attention! Confirmed ${expiryInfo.nameEn} Call signal incoming!`
                 );
             }
         }
 
-        // Execution Alert (Confirmed across 3 frames for 100% precision accuracy)
-        if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 3) {
+        // Execution Alert (Requires 2 stable frames)
+        if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 2) {
             lastTriggeredIntervalKey = intervalKey;
             preAlertGiven = false;
-            triggerTradeExecution('CALL', 100, metrics.detectedPattern.name, expiryInfo, trendForecast);
+            triggerTradeExecution('CALL', finalCallConfidence, metrics.detectedPattern.name, expiryInfo, trendForecast);
         }
     }
-    // Ultra 100% Confirmed PUT (DOWN) Signal (Requires >=5 passed confluence pillars for 100% accuracy)
-    else if (finalPutConfidence >= effectiveThreshold && finalPutConfidence > finalCallConfidence && passedCount >= 5) {
+    // Confirmed PUT (DOWN) Signal
+    else if (finalPutConfidence >= effectiveThreshold && finalPutConfidence > finalCallConfidence && passedCount >= minRequiredPillars) {
         if (frameConfirmation.candidateType === 'PUT') {
             frameConfirmation.consecutiveFrames++;
         } else {
@@ -1011,13 +1015,13 @@ function evaluatePillars(metrics) {
 
         mainSignalHud.className = 'signal-hud-v2 put-active';
         hudActionIcon.textContent = '🔻';
-        hudSignalTitle.textContent = `🎯 100% CONFIRMED PUT (DOWN) • ${expiryInfo.label.toUpperCase()}`;
-        hudSignalReason.textContent = `Bearish Flow + RSI ${metrics.estimatedRsi} + ${metrics.detectedPattern.name} • 🌊 ${bearForecast.durationTextEn} (${passedCount}/6 Pillars • Conf: ${frameConfirmation.consecutiveFrames}/3 Frames)`;
-        hudConfidenceScore.textContent = `100%`;
+        hudSignalTitle.textContent = `🎯 CONFIRMED PUT (DOWN) • ${expiryInfo.label.toUpperCase()}`;
+        hudSignalReason.textContent = `Bearish Flow + RSI ${metrics.estimatedRsi} + ${metrics.detectedPattern.name} • 🌊 ${bearForecast.durationTextEn} (${passedCount}/6 Pillars Active)`;
+        hudConfidenceScore.textContent = `${finalPutConfidence}%`;
         hudActionTag.textContent = `SELL DOWN (${expiryInfo.label})`;
         hudActionTag.className = 'action-tag put';
 
-        // Pre-Alert Voice Warning with Multi-Minute Trend Guidance
+        // Pre-Alert Voice Warning in Tamil
         if (isPreAlertWindow && !preAlertGiven && lastTriggeredIntervalKey !== intervalKey) {
             preAlertGiven = true;
             playLaserChime('WARN');
@@ -1028,17 +1032,17 @@ function evaluatePillars(metrics) {
                 );
             } else {
                 speakVoice(
-                    `கவனிக்கவும்! 100% உறுதியான ${expiryInfo.nameTa} புட் சிக்னல் வரப்போகிறது!`,
-                    `Attention! 100% confirmed ${expiryInfo.nameEn} Put signal incoming!`
+                    `கவனிக்கவும்! உறுதியான ${expiryInfo.nameTa} புட் சிக்னல் வரப்போகிறது!`,
+                    `Attention! Confirmed ${expiryInfo.nameEn} Put signal incoming!`
                 );
             }
         }
 
-        // Execution Alert (Confirmed across 3 frames for 100% precision accuracy)
-        if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 3) {
+        // Execution Alert (Requires 2 stable frames)
+        if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 2) {
             lastTriggeredIntervalKey = intervalKey;
             preAlertGiven = false;
-            triggerTradeExecution('PUT', 100, metrics.detectedPattern.name, expiryInfo, bearForecast);
+            triggerTradeExecution('PUT', finalPutConfidence, metrics.detectedPattern.name, expiryInfo, bearForecast);
         }
     } else {
         frameConfirmation = { candidateType: null, candidateConfidence: 0, consecutiveFrames: 0 };
