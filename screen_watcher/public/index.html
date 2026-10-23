@@ -91,45 +91,27 @@
                     <div class="toolbar-right">
                         <div class="control-group">
                             <span class="preset-label">⏱️ Target Expiry:</span>
-                            <select id="expiryTimeframeSelect" class="styled-select highlight-select">
-                                <option value="auto" selected>🤖 Auto-AI Optimal (5s - 5m)</option>
-                                <option value="5s">⚡ 5 Seconds (Turbo Scalp)</option>
-                                <option value="10s">⚡ 10 Seconds (Fast Scalp)</option>
-                                <option value="15s">⚡ 15 Seconds (Scalp)</option>
-                                <option value="30s">⚡ 30 Seconds (Micro Scalp)</option>
-                                <option value="45s">⚡ 45 Seconds (Scalp)</option>
-                                <option value="1m">⏱️ 1 Minute (Standard)</option>
-                                <option value="1m30s">⏱️ 1 Min 30 Sec (1:30m Expiry)</option>
-                                <option value="2m">⏱️ 2 Minutes (Reversal)</option>
-                                <option value="3m">⏱️ 3 Minutes (Momentum)</option>
-                                <option value="5m">⏱️ 5 Minutes (Trend Flow)</option>
+                            <select id="expiryTimeframeSelect" class="styled-select highlight-select" disabled>
+                                <option value="1m" selected>⚡ 1 Minute (Exclusive Strong Sniper)</option>
                             </select>
                         </div>
                         <div class="control-group">
                             <span class="preset-label">Trading Strategy:</span>
                             <select id="strategyModeSelect" class="styled-select highlight-select">
-                                <option value="reel" selected>🎯 Reel 99% Strategy: BB(20,2) + RSI(80/20) + EMA Cross</option>
-                                <option value="confluence">🔥 90-100% Strict Multi-Confluence (5 Pillars)</option>
+                                <option value="confluence" selected>🔥 90-100% Ultra-Strong Sniper (5-Pillar Confluence)</option>
+                                <option value="reel">🎯 Reel 99% Strategy: BB(20,2) + RSI Climax + EMA Cross</option>
                                 <option value="reversal">⚡ Pure Bollinger Band + Pinbar Reversal</option>
-                                <option value="trend">📈 Strong EMA 9/21/50 Trend Flow</option>
+                                <option value="trend">📈 Strong EMA 9/21 Trend Flow</option>
                             </select>
                         </div>
                     </div>
                 </div>
 
-                <!-- Fast Timeframe Switcher Ribbon -->
+                <!-- Active 1-Minute Expiry Badge -->
                 <div class="tf-ribbon-bar">
-                    <span class="tf-label">Quick Expiry:</span>
+                    <span class="tf-label">⚡ Active Expiry Mode:</span>
                     <div class="tf-pill-group" id="tfPillGroup">
-                        <button class="tf-pill active" data-tf="auto">Auto AI</button>
-                        <button class="tf-pill" data-tf="5s">5s</button>
-                        <button class="tf-pill" data-tf="10s">10s</button>
-                        <button class="tf-pill" data-tf="30s">30s</button>
-                        <button class="tf-pill" data-tf="1m">1m</button>
-                        <button class="tf-pill" data-tf="1m30s">1:30m</button>
-                        <button class="tf-pill" data-tf="2m">2m</button>
-                        <button class="tf-pill" data-tf="3m">3m</button>
-                        <button class="tf-pill" data-tf="5m">5m</button>
+                        <button class="tf-pill active" data-tf="1m">🔒 1-Minute Strong Signals Only (Locked)</button>
                     </div>
                 </div>
 
@@ -253,7 +235,7 @@
                     <div class="hud-metrics">
                         <div class="metric-block">
                             <span class="m-label">RECOMMENDED EXPIRY</span>
-                            <span class="m-value tag expiry-pill-badge" id="hudRecommendedExpiry">Auto (5s-5m)</span>
+                            <span class="m-value tag expiry-pill-badge" id="hudRecommendedExpiry">1 Min (60s)</span>
                         </div>
                         <div class="metric-block">
                             <span class="m-label">SIGNAL CONFIDENCE</span>
@@ -517,10 +499,10 @@
 
                         <div class="setting-item col-full">
                             <div class="slider-header">
-                                <label for="confidenceThreshold">Min Signal Confidence:</label>
-                                <span class="slider-num" id="thresholdValueDisplay">85%</span>
+                                <label for="confidenceThreshold">Min Signal Confidence (Strong Filter):</label>
+                                <span class="slider-num" id="thresholdValueDisplay">90%</span>
                             </div>
-                            <input type="range" id="confidenceThreshold" min="75" max="100" value="85" step="1" class="pro-slider">
+                            <input type="range" id="confidenceThreshold" min="85" max="100" value="90" step="1" class="pro-slider">
                         </div>
 
                         <!-- Telegram Live Push Alerts -->

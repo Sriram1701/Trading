@@ -133,58 +133,19 @@ let frameConfirmation = {
     consecutiveFrames: 0
 };
 
-// Timeframe Metadata Dictionary
+// Timeframe Metadata Dictionary (Locked exclusively to 1-Minute Strong Signals)
 const TIMEFRAME_INFO = {
-    'auto':  { label: 'Auto (5s - 5m)', nameEn: 'AI Optimal Expiry', nameTa: 'AI உகந்த நேரம்', sec: 60 },
-    '5s':    { label: '5s Turbo',       nameEn: '5 Seconds',         nameTa: '5 வினாடிகள்',     sec: 5 },
-    '10s':   { label: '10s Fast',      nameEn: '10 Seconds',        nameTa: '10 வினாடிகள்',    sec: 10 },
-    '15s':   { label: '15s Scalp',     nameEn: '15 Seconds',        nameTa: '15 வினாடிகள்',    sec: 15 },
-    '30s':   { label: '30s Scalp',     nameEn: '30 Seconds',        nameTa: '30 வினாடிகள்',    sec: 30 },
-    '45s':   { label: '45s Scalp',     nameEn: '45 Seconds',        nameTa: '45 வினாடிகள்',    sec: 45 },
-    '1m':    { label: '1 Min',         nameEn: '1 Minute',          nameTa: '1 நிமிடம்',       sec: 60 },
-    '1m30s': { label: '1m 30s',        nameEn: '1 Minute 30 Secs',  nameTa: '1 நிமிடம் 30 வினாடிகள்', sec: 90 },
-    '2m':    { label: '2 Min',         nameEn: '2 Minutes',         nameTa: '2 நிமிடங்கள்',    sec: 120 },
-    '3m':    { label: '3 Min',         nameEn: '3 Minutes',         nameTa: '3 நிமிடங்கள்',    sec: 180 },
-    '5m':    { label: '5 Min Trend',    nameEn: '5 Minutes',         nameTa: '5 நிமிடங்கள்',    sec: 300 }
+    '1m': { label: '1 Min', nameEn: '1 Minute', nameTa: '1 நிமிடம்', sec: 60 }
 };
 
 // --------------------------------------------------------------------------
-// 1. Timeframe Ribbon & Dropdown Sync
+// 1. Timeframe Ribbon & Dropdown (Locked 1-Minute Mode)
 // --------------------------------------------------------------------------
-if (tfPillGroup) {
-    tfPillGroup.addEventListener('click', (e) => {
-        const btn = e.target.closest('.tf-pill');
-        if (!btn) return;
-        const tf = btn.dataset.tf;
-        if (tf) {
-            expiryTimeframeSelect.value = tf;
-            updateActiveTfPill(tf);
-            updateHudExpiryLabel(tf);
-        }
-    });
+if (expiryTimeframeSelect) {
+    expiryTimeframeSelect.value = '1m';
 }
-
-expiryTimeframeSelect.addEventListener('change', (e) => {
-    const tf = e.target.value;
-    updateActiveTfPill(tf);
-    updateHudExpiryLabel(tf);
-});
-
-function updateActiveTfPill(tf) {
-    if (!tfPillGroup) return;
-    const pills = tfPillGroup.querySelectorAll('.tf-pill');
-    pills.forEach(p => {
-        if (p.dataset.tf === tf) {
-            p.classList.add('active');
-        } else {
-            p.classList.remove('active');
-        }
-    });
-}
-
-function updateHudExpiryLabel(tf) {
-    const info = TIMEFRAME_INFO[tf] || TIMEFRAME_INFO['auto'];
-    hudRecommendedExpiry.textContent = info.label;
+if (hudRecommendedExpiry) {
+    hudRecommendedExpiry.textContent = '1 Min (60s)';
 }
 
 // --------------------------------------------------------------------------
@@ -891,73 +852,51 @@ function evaluatePillars(metrics) {
 
     const passedCount = Math.max(callPillars, putPillars);
 
-    // Determine Smart AI Expiry (Multi-Minute Trend Hold Protection)
-    let finalExpiryKey = selectedTf;
-    if (selectedTf === 'auto') {
-        if (metrics.emaDirection !== 'NEUTRAL' || metrics.detectedPattern.speedType === 'trend' || metrics.greenRatio > 0.60 || metrics.redRatio > 0.60) {
-            // Strong trend flow -> Recommend 5m or 10m duration
-            if (passedCount >= 5) {
-                finalExpiryKey = '10m';
-            } else {
-                finalExpiryKey = '5m';
-            }
-        } else if (metrics.detectedPattern.isHammer || metrics.detectedPattern.isShootingStar || metrics.bbTouchType !== 'INSIDE') {
-            finalExpiryKey = '1m'; // 1 Minute Pinbar Reversal
-        } else {
-            finalExpiryKey = '2m'; // Default Safe 2m Duration
-        }
-    }
+    // Lock strictly to 1-Minute Expiry
+    const finalExpiryKey = '1m';
+    const expiryInfo = TIMEFRAME_INFO['1m'];
+    const totalSecs = 60;
+    const secsLeftInCycle = 60 - currentSeconds;
 
-    // --- REVERSE STRATEGY (1M FORCED) ---
-    // User requested to force 1-minute expiry.
-    finalExpiryKey = '1m';
-
-    const expiryInfo = TIMEFRAME_INFO[finalExpiryKey] || { label: finalExpiryKey, nameEn: finalExpiryKey === '10m' ? '10 Minutes' : '5 Minutes', nameTa: finalExpiryKey === '10m' ? '10 நிமிடங்கள்' : '5 நிமிடங்கள்', sec: finalExpiryKey === '10m' ? 600 : 300 };
-    const totalSecs = expiryInfo.sec;
-
-    let secsLeftInCycle = 0;
-    if (totalSecs <= 60) {
-        const sub = currentSeconds % totalSecs;
-        secsLeftInCycle = totalSecs - sub;
-        if (secsLeftInCycle === 0) secsLeftInCycle = totalSecs;
-    } else {
-        const minsRemaining = Math.floor(totalSecs / 60) - (now.getMinutes() % Math.floor(totalSecs / 60)) - 1;
-        secsLeftInCycle = (minsRemaining * 60) + (60 - currentSeconds);
-    }
-
-    const isExecuteWindow = true; // Always allow smooth real-time scanning
-    const isPreAlertWindow = (totalSecs <= 15) ? (secsLeftInCycle <= 4 && secsLeftInCycle >= 3) : (secsLeftInCycle <= 10 && secsLeftInCycle >= 6);
+    const isPreAlertWindow = (secsLeftInCycle <= 10 && secsLeftInCycle >= 4);
 
     if (confluencePassedBadge) {
-        confluencePassedBadge.textContent = `${passedCount} Indicators Active`;
+        confluencePassedBadge.textContent = `${passedCount}/6 Pillars Active`;
     }
     if (hudDetectedPattern) hudDetectedPattern.textContent = metrics.detectedPattern.name;
-    if (hudRecommendedExpiry) hudRecommendedExpiry.textContent = expiryInfo.label;
+    if (hudRecommendedExpiry) hudRecommendedExpiry.textContent = '1 Min (60s)';
 
-    let originalCallConfidence = Math.min(100, Math.max(50, callScore + (passedCount >= 4 ? 10 : 0)));
-    let originalPutConfidence = Math.min(100, Math.max(50, putScore + (passedCount >= 4 ? 10 : 0)));
+    let originalCallConfidence = Math.min(100, Math.max(50, callScore + (passedCount >= 4 ? 12 : 0)));
+    let originalPutConfidence = Math.min(100, Math.max(50, putScore + (passedCount >= 4 ? 12 : 0)));
 
     let finalCallConfidence = originalCallConfidence;
     let finalPutConfidence = originalPutConfidence;
 
     const nowTime = Date.now();
-    const intervalKey = `${finalExpiryKey}_${Math.floor(nowTime / (totalSecs * 1000))}`;
+    const intervalKey = `1m_${Math.floor(nowTime / 60000)}`;
     
-    // Dynamic Thresholds (Adapts to user confidence slider)
-    const effectiveThreshold = minThreshold;
-    const isSniperActive = sniperModeToggle ? sniperModeToggle.checked : true;
-    const minRequiredPillars = isSniperActive ? 4 : 3;
+    // Strict Strong Signal Filter (Minimum 90% confidence required)
+    const effectiveThreshold = Math.max(90, parseInt(confidenceThreshold.value, 10) || 90);
+    const minRequiredPillars = 4; // At least 4-5 pillars must agree
 
-    const isStrongTrend = (metrics.emaDirection !== 'NEUTRAL' || metrics.greenRatio > 0.60 || metrics.redRatio > 0.60);
-    const trendForecast = {
-        isStrong: isStrongTrend,
-        durationTextEn: isStrongTrend ? `${expiryInfo.nameEn} Trend` : "Reversal",
-        durationTextTa: isStrongTrend ? `${expiryInfo.nameTa} ட்ரெண்ட்` : "திருப்புமுனை",
-        suggestedExpiries: isStrongTrend ? ["5m", "10m"] : ["1m", "2m"]
-    };
+    // Filter out weak / choppy markets
+    const isNoisyMarket = metrics.detectedPattern.isOtcTrap || metrics.detectedPattern.name === 'Consolidation Doji' || metrics.detectedPattern.name === 'Flat / Inactive';
 
-    // Confirmed CALL (UP) Signal
-    if (finalCallConfidence >= effectiveThreshold && finalCallConfidence > finalPutConfidence && passedCount >= minRequiredPillars) {
+    // Strict Strong Signal Criteria
+    const isStrongCall = !isNoisyMarket &&
+                         finalCallConfidence >= effectiveThreshold &&
+                         finalCallConfidence > finalPutConfidence &&
+                         passedCount >= minRequiredPillars &&
+                         (metrics.bbTouchType === 'LOWER' || metrics.emaDirection === 'BULLISH' || metrics.detectedPattern.isHammer || metrics.greenRatio > 0.53);
+
+    const isStrongPut = !isNoisyMarket &&
+                        finalPutConfidence >= effectiveThreshold &&
+                        finalPutConfidence > finalCallConfidence &&
+                        passedCount >= minRequiredPillars &&
+                        (metrics.bbTouchType === 'UPPER' || metrics.emaDirection === 'BEARISH' || metrics.detectedPattern.isShootingStar || metrics.redRatio > 0.53);
+
+    // Confirmed Strong CALL (UP) Signal (1-Minute Only)
+    if (isStrongCall) {
         if (frameConfirmation.candidateType === 'CALL') {
             frameConfirmation.consecutiveFrames++;
         } else {
@@ -966,10 +905,10 @@ function evaluatePillars(metrics) {
 
         mainSignalHud.className = 'signal-hud-v2 call-active';
         hudActionIcon.textContent = '🚀';
-        hudSignalTitle.textContent = `UP TRADE • ${expiryInfo.label.toUpperCase()}`;
-        hudSignalReason.textContent = `Take an UP trade for ${expiryInfo.nameEn}`;
+        hudSignalTitle.textContent = `🔥 STRONG CALL • 1 MINUTE`;
+        hudSignalReason.textContent = `High-Confidence 1-Minute CALL setup on next candle open!`;
         hudConfidenceScore.textContent = `${finalCallConfidence}%`;
-        hudActionTag.textContent = `UP`;
+        hudActionTag.textContent = `UP (1M)`;
         hudActionTag.className = 'action-tag call';
 
         // Pre-Alert Voice Warning
@@ -977,20 +916,20 @@ function evaluatePillars(metrics) {
             preAlertGiven = true;
             playLaserChime('WARN');
             speakVoice(
-                `${expiryInfo.nameTa} அப் டிரேட் எடுக்கவும்.`,
-                `Take a ${expiryInfo.nameEn} UP trade.`
+                `ஸ்ட்ராங் 1 நிமிடம் கால் வரப்போகிறது, தயாராக இருங்கள்.`,
+                `Strong 1 Minute CALL signal incoming, prepare trade.`
             );
         }
 
-        // Execution Alert (Requires 2 stable frames)
-        if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 2) {
+        // Execution Alert (Requires 3 consecutive stable frames for zero fake-outs)
+        if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 3) {
             lastTriggeredIntervalKey = intervalKey;
             preAlertGiven = false;
-            triggerTradeExecution('CALL', finalCallConfidence, metrics.detectedPattern.name, expiryInfo, trendForecast);
+            triggerTradeExecution('CALL', finalCallConfidence, metrics.detectedPattern.name, expiryInfo, { isStrong: true });
         }
     }
-    // Confirmed PUT (DOWN) Signal
-    else if (finalPutConfidence >= effectiveThreshold && finalPutConfidence > finalCallConfidence && passedCount >= minRequiredPillars) {
+    // Confirmed Strong PUT (DOWN) Signal (1-Minute Only)
+    else if (isStrongPut) {
         if (frameConfirmation.candidateType === 'PUT') {
             frameConfirmation.consecutiveFrames++;
         } else {
@@ -999,10 +938,10 @@ function evaluatePillars(metrics) {
 
         mainSignalHud.className = 'signal-hud-v2 put-active';
         hudActionIcon.textContent = '🔻';
-        hudSignalTitle.textContent = `DOWN TRADE • ${expiryInfo.label.toUpperCase()}`;
-        hudSignalReason.textContent = `Take a DOWN trade for ${expiryInfo.nameEn}`;
+        hudSignalTitle.textContent = `🔥 STRONG PUT • 1 MINUTE`;
+        hudSignalReason.textContent = `High-Confidence 1-Minute PUT setup on next candle open!`;
         hudConfidenceScore.textContent = `${finalPutConfidence}%`;
-        hudActionTag.textContent = `DOWN`;
+        hudActionTag.textContent = `DOWN (1M)`;
         hudActionTag.className = 'action-tag put';
 
         // Pre-Alert Voice Warning
@@ -1010,16 +949,16 @@ function evaluatePillars(metrics) {
             preAlertGiven = true;
             playLaserChime('WARN');
             speakVoice(
-                `${expiryInfo.nameTa} டவுன் டிரேட் எடுக்கவும்.`,
-                `Take a ${expiryInfo.nameEn} DOWN trade.`
+                `ஸ்ட்ராங் 1 நிமிடம் புட் வரப்போகிறது, தயாராக இருங்கள்.`,
+                `Strong 1 Minute PUT signal incoming, prepare trade.`
             );
         }
 
-        // Execution Alert (Requires 2 stable frames)
-        if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 2) {
+        // Execution Alert (Requires 3 consecutive stable frames for zero fake-outs)
+        if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 3) {
             lastTriggeredIntervalKey = intervalKey;
             preAlertGiven = false;
-            triggerTradeExecution('PUT', finalPutConfidence, metrics.detectedPattern.name, expiryInfo, trendForecast);
+            triggerTradeExecution('PUT', finalPutConfidence, metrics.detectedPattern.name, expiryInfo, { isStrong: true });
         }
     } else {
         frameConfirmation = { candidateType: null, candidateConfidence: 0, consecutiveFrames: 0 };
@@ -1095,11 +1034,11 @@ function triggerTradeExecution(type, confidence, patternName, expiryInfo, trendF
     const isCall = type === 'CALL';
     actionFlashBanner.className = isCall ? 'action-flash-banner call' : 'action-flash-banner put';
     flashIcon.textContent = isCall ? '🚀' : '🔻';
-    flashTitle.textContent = isCall ? `UP TRADE NOW!` : `DOWN TRADE NOW!`;
-    flashExpiryBadge.textContent = `${expiryInfo.label.toUpperCase()}`;
-    flashSubtitle.textContent = `Duration: ${expiryInfo.nameEn}`;
+    flashTitle.textContent = isCall ? `🔥 STRONG CALL (UP) NOW!` : `🔥 STRONG PUT (DOWN) NOW!`;
+    flashExpiryBadge.textContent = `1 MINUTE EXPIRY`;
+    flashSubtitle.textContent = `High-Confidence Confluence Sniper Entry`;
 
-    let countdown = Math.min(8, expiryInfo.sec);
+    let countdown = 10;
     flashCountdown.textContent = `${countdown}s`;
     actionFlashBanner.classList.remove('hidden');
 
@@ -1116,8 +1055,8 @@ function triggerTradeExecution(type, confidence, patternName, expiryInfo, trendF
     sendDesktopNotification(type, confidence, patternName, expiryInfo, trendForecast);
 
     speakVoice(
-        `${expiryInfo.nameTa} ${isCall ? 'அப்' : 'டவுன்'} டிரேட் எடுக்கவும்.`,
-        `Take a ${expiryInfo.nameEn} ${isCall ? 'UP' : 'DOWN'} trade.`
+        `ஸ்ட்ராங் 1 நிமிடம் ${isCall ? 'கால் (UP)' : 'புட் (DOWN)'} டிரேட் எடுக்கவும்!`,
+        `STRONG 1 MINUTE ${isCall ? 'CALL' : 'PUT'} TRADE NOW!`
     );
 
     sessionStats.totalSignals++;
