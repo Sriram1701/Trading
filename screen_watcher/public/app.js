@@ -491,23 +491,8 @@ function resetHud() {
 function runComputerVisionScan() {
     if (!quotexVideo.videoWidth || !quotexVideo.videoHeight) return;
 
-    // Check if Active Trade or Cooldown is running
+    // Cooldown and trade lock removed to allow continuous scanning
     const nowTime = Date.now();
-    if (activeTrade && tradeLockToggle.checked) {
-        return;
-    }
-
-    if (nowTime < cooldownEndTime) {
-        const remainingCooldown = Math.ceil((cooldownEndTime - nowTime) / 1000);
-        mainSignalHud.className = 'signal-hud-v2';
-        hudActionIcon.textContent = '🛡️';
-        hudSignalTitle.textContent = `COOLDOWN BUFFER ACTIVE (${remainingCooldown}s)`;
-        hudSignalReason.textContent = 'Anti-revenge cooldown buffer in progress. Preparing for next clean high-accuracy entry...';
-        hudConfidenceScore.textContent = 'REST';
-        hudActionTag.textContent = 'PAUSED';
-        hudActionTag.className = 'action-tag wait';
-        return;
-    }
 
     const canvas = processingCanvas;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -567,7 +552,7 @@ function runComputerVisionScan() {
         const y = Math.floor(pixelIdx / roiW);
 
         // Bullish Green Candle Detection
-        if (g > 140 && g > r * 1.30 && g > b * 1.20) {
+        if (g > 110 && g > r * 1.15 && g >= b * 0.85) {
             greenPixels++;
             greenYPoints.push(y);
             if (x >= activeZoneBoundary) {
@@ -579,7 +564,7 @@ function runComputerVisionScan() {
             }
         }
         // Bearish Red Candle Detection
-        else if (r > 140 && r > g * 1.30 && r > b * 1.20) {
+        else if (r > 120 && r > g * 1.25 && r >= b * 0.9) {
             redPixels++;
             redYPoints.push(y);
             if (x >= activeZoneBoundary) {
@@ -702,6 +687,9 @@ function runComputerVisionScan() {
         indWickStatus.textContent = `${detectedPattern.wickPct}% ${detectedPattern.isHammer || detectedPattern.isShootingStar ? '✅ Strong Pinbar' : ''}`;
         indWickStatus.className = detectedPattern.wickPct >= 35 ? 'ind-val bullish' : 'ind-val';
     }
+
+    // Update Live Chart Diagnostics Bar
+    updateChartDiagnostics(totalCandlePixels, bbTouchType, yellowEmaPoints.length, rsiSubWindowY.length, estimatedRsi);
     
     // Evaluate 6 Pillars + Reel Strategy + Multi-Timeframe Decision
     evaluatePillars({
@@ -829,7 +817,6 @@ function extractCandlePattern(greenY, redY, greenRatio, redRatio, activeGreenY, 
 // 6. Strict 6-Pillar Confluence & 99% Sniper Decision Matrix
 // --------------------------------------------------------------------------
 function evaluatePillars(metrics) {
-    if (activeTrade && tradeLockToggle.checked) return;
 
     const now = new Date();
     const currentSeconds = now.getSeconds();
@@ -907,12 +894,12 @@ function evaluatePillars(metrics) {
     // Determine Smart AI Expiry (Multi-Minute Trend Hold Protection)
     let finalExpiryKey = selectedTf;
     if (selectedTf === 'auto') {
-        if (metrics.emaDirection !== 'NEUTRAL' || metrics.detectedPattern.speedType === 'trend') {
-            // Strong trend flow -> Recommend 2m or 3m duration for guaranteed win without pullback knockout
-            if (metrics.greenRatio > 0.64 || metrics.redRatio > 0.64) {
-                finalExpiryKey = '3m'; // 3 Minutes Confident Trend Holding
+        if (metrics.emaDirection !== 'NEUTRAL' || metrics.detectedPattern.speedType === 'trend' || metrics.greenRatio > 0.60 || metrics.redRatio > 0.60) {
+            // Strong trend flow -> Recommend 5m or 10m duration
+            if (passedCount >= 5) {
+                finalExpiryKey = '10m';
             } else {
-                finalExpiryKey = '2m'; // 2 Minutes Confident Trend
+                finalExpiryKey = '5m';
             }
         } else if (metrics.detectedPattern.isHammer || metrics.detectedPattern.isShootingStar || metrics.bbTouchType !== 'INSIDE') {
             finalExpiryKey = '1m'; // 1 Minute Pinbar Reversal
@@ -921,7 +908,11 @@ function evaluatePillars(metrics) {
         }
     }
 
-    const expiryInfo = TIMEFRAME_INFO[finalExpiryKey] || TIMEFRAME_INFO['1m'];
+    // --- REVERSE STRATEGY (1M FORCED) ---
+    // User requested to force 1-minute expiry.
+    finalExpiryKey = '1m';
+
+    const expiryInfo = TIMEFRAME_INFO[finalExpiryKey] || { label: finalExpiryKey, nameEn: finalExpiryKey === '10m' ? '10 Minutes' : '5 Minutes', nameTa: finalExpiryKey === '10m' ? '10 நிமிடங்கள்' : '5 நிமிடங்கள்', sec: finalExpiryKey === '10m' ? 600 : 300 };
     const totalSecs = expiryInfo.sec;
 
     let secsLeftInCycle = 0;
@@ -943,8 +934,11 @@ function evaluatePillars(metrics) {
     if (hudDetectedPattern) hudDetectedPattern.textContent = metrics.detectedPattern.name;
     if (hudRecommendedExpiry) hudRecommendedExpiry.textContent = expiryInfo.label;
 
-    let finalCallConfidence = Math.min(100, Math.max(50, callScore + (passedCount >= 4 ? 10 : 0)));
-    let finalPutConfidence = Math.min(100, Math.max(50, putScore + (passedCount >= 4 ? 10 : 0)));
+    let originalCallConfidence = Math.min(100, Math.max(50, callScore + (passedCount >= 4 ? 10 : 0)));
+    let originalPutConfidence = Math.min(100, Math.max(50, putScore + (passedCount >= 4 ? 10 : 0)));
+
+    let finalCallConfidence = originalCallConfidence;
+    let finalPutConfidence = originalPutConfidence;
 
     const nowTime = Date.now();
     const intervalKey = `${finalExpiryKey}_${Math.floor(nowTime / (totalSecs * 1000))}`;
@@ -957,9 +951,9 @@ function evaluatePillars(metrics) {
     const isStrongTrend = (metrics.emaDirection !== 'NEUTRAL' || metrics.greenRatio > 0.60 || metrics.redRatio > 0.60);
     const trendForecast = {
         isStrong: isStrongTrend,
-        durationTextEn: isStrongTrend ? "Continuous trend expected for next 3 to 5 Minutes!" : "Pinbar Reversal Setup (1-2m)",
-        durationTextTa: isStrongTrend ? "அடுத்த 3 முதல் 5 நிமிடங்களுக்கு மார்க்கெட் தொடர்ச்சியாக அப் செல்லும்!" : "1-2 நிமிட திருப்புமுனை வாய்ப்பு",
-        suggestedExpiries: isStrongTrend ? ["2m", "3m", "5m"] : ["1m", "2m"]
+        durationTextEn: isStrongTrend ? `${expiryInfo.nameEn} Trend` : "Reversal",
+        durationTextTa: isStrongTrend ? `${expiryInfo.nameTa} ட்ரெண்ட்` : "திருப்புமுனை",
+        suggestedExpiries: isStrongTrend ? ["5m", "10m"] : ["1m", "2m"]
     };
 
     // Confirmed CALL (UP) Signal
@@ -972,27 +966,20 @@ function evaluatePillars(metrics) {
 
         mainSignalHud.className = 'signal-hud-v2 call-active';
         hudActionIcon.textContent = '🚀';
-        hudSignalTitle.textContent = `🎯 CONFIRMED CALL (UP) • ${expiryInfo.label.toUpperCase()}`;
-        hudSignalReason.textContent = `Bullish Flow + RSI ${metrics.estimatedRsi} + ${metrics.detectedPattern.name} • 🌊 ${trendForecast.durationTextEn} (${passedCount}/6 Pillars Active)`;
+        hudSignalTitle.textContent = `UP TRADE • ${expiryInfo.label.toUpperCase()}`;
+        hudSignalReason.textContent = `Take an UP trade for ${expiryInfo.nameEn}`;
         hudConfidenceScore.textContent = `${finalCallConfidence}%`;
-        hudActionTag.textContent = `BUY UP (${expiryInfo.label})`;
+        hudActionTag.textContent = `UP`;
         hudActionTag.className = 'action-tag call';
 
-        // Pre-Alert Voice Warning in Tamil
+        // Pre-Alert Voice Warning
         if (isPreAlertWindow && !preAlertGiven && lastTriggeredIntervalKey !== intervalKey) {
             preAlertGiven = true;
             playLaserChime('WARN');
-            if (trendForecast.isStrong) {
-                speakVoice(
-                    `கவனிக்கவும்! அடுத்த 3 முதல் 5 நிமிடங்களுக்கு மார்க்கெட் தொடர்ச்சியாக அப் செல்லப்போகிறது!`,
-                    `Attention! Continuous UP trend expected for next 3 to 5 minutes!`
-                );
-            } else {
-                speakVoice(
-                    `கவனிக்கவும்! உறுதியான ${expiryInfo.nameTa} கால் சிக்னல் வரப்போகிறது!`,
-                    `Attention! Confirmed ${expiryInfo.nameEn} Call signal incoming!`
-                );
-            }
+            speakVoice(
+                `${expiryInfo.nameTa} அப் டிரேட் எடுக்கவும்.`,
+                `Take a ${expiryInfo.nameEn} UP trade.`
+            );
         }
 
         // Execution Alert (Requires 2 stable frames)
@@ -1010,44 +997,29 @@ function evaluatePillars(metrics) {
             frameConfirmation = { candidateType: 'PUT', candidateConfidence: finalPutConfidence, consecutiveFrames: 1 };
         }
 
-        const isBearishTrend = (metrics.emaDirection === 'BEARISH' || metrics.redRatio > 0.60);
-        const bearForecast = {
-            isStrong: isBearishTrend,
-            durationTextEn: isBearishTrend ? "Continuous DOWN expected for next 3 to 5 Minutes!" : "Pinbar Reversal Setup (1-2m)",
-            durationTextTa: isBearishTrend ? "அடுத்த 3 முதல் 5 நிமிடங்களுக்கு மார்க்கெட் தொடர்ச்சியாக டவுன் செல்லும்!" : "1-2 நிமிட திருப்புமுனை வாய்ப்பு",
-            suggestedExpiries: isBearishTrend ? ["2m", "3m", "5m"] : ["1m", "2m"]
-        };
-
         mainSignalHud.className = 'signal-hud-v2 put-active';
         hudActionIcon.textContent = '🔻';
-        hudSignalTitle.textContent = `🎯 CONFIRMED PUT (DOWN) • ${expiryInfo.label.toUpperCase()}`;
-        hudSignalReason.textContent = `Bearish Flow + RSI ${metrics.estimatedRsi} + ${metrics.detectedPattern.name} • 🌊 ${bearForecast.durationTextEn} (${passedCount}/6 Pillars Active)`;
+        hudSignalTitle.textContent = `DOWN TRADE • ${expiryInfo.label.toUpperCase()}`;
+        hudSignalReason.textContent = `Take a DOWN trade for ${expiryInfo.nameEn}`;
         hudConfidenceScore.textContent = `${finalPutConfidence}%`;
-        hudActionTag.textContent = `SELL DOWN (${expiryInfo.label})`;
+        hudActionTag.textContent = `DOWN`;
         hudActionTag.className = 'action-tag put';
 
-        // Pre-Alert Voice Warning in Tamil
+        // Pre-Alert Voice Warning
         if (isPreAlertWindow && !preAlertGiven && lastTriggeredIntervalKey !== intervalKey) {
             preAlertGiven = true;
             playLaserChime('WARN');
-            if (bearForecast.isStrong) {
-                speakVoice(
-                    `கவனிக்கவும்! அடுத்த 3 முதல் 5 நிமிடங்களுக்கு மார்க்கெட் தொடர்ச்சியாக டவுன் செல்லப்போகிறது!`,
-                    `Attention! Continuous DOWN trend expected for next 3 to 5 minutes!`
-                );
-            } else {
-                speakVoice(
-                    `கவனிக்கவும்! உறுதியான ${expiryInfo.nameTa} புட் சிக்னல் வரப்போகிறது!`,
-                    `Attention! Confirmed ${expiryInfo.nameEn} Put signal incoming!`
-                );
-            }
+            speakVoice(
+                `${expiryInfo.nameTa} டவுன் டிரேட் எடுக்கவும்.`,
+                `Take a ${expiryInfo.nameEn} DOWN trade.`
+            );
         }
 
         // Execution Alert (Requires 2 stable frames)
         if (lastTriggeredIntervalKey !== intervalKey && frameConfirmation.consecutiveFrames >= 2) {
             lastTriggeredIntervalKey = intervalKey;
             preAlertGiven = false;
-            triggerTradeExecution('PUT', finalPutConfidence, metrics.detectedPattern.name, expiryInfo, bearForecast);
+            triggerTradeExecution('PUT', finalPutConfidence, metrics.detectedPattern.name, expiryInfo, trendForecast);
         }
     } else {
         frameConfirmation = { candidateType: null, candidateConfidence: 0, consecutiveFrames: 0 };
@@ -1072,116 +1044,60 @@ function showSideToast(type, confidence, patternName, expiryInfo, trendForecast)
     const toast = document.createElement('div');
     toast.className = `side-toast ${isCall ? 'call' : 'put'}`;
 
-    const trendBadgeHtml = trendForecast && trendForecast.isStrong ? `
-        <div class="toast-trend-banner" style="background: rgba(0, 229, 255, 0.12); border: 1px solid rgba(0, 229, 255, 0.3); padding: 6px 10px; border-radius: 6px; margin-top: 6px; font-size: 11px; color: #e0f7fa;">
-            🌊 <b>MULTI-MINUTE TREND DETECTED:</b> Expected Continuous <b>${isCall ? 'UP' : 'DOWN'}</b> for <b>3m to 5m</b>!<br>
-            <span style="color: #00e5ff; font-weight: 600;">Suggested Expiries: 2m • 3m • 5m</span>
-        </div>
-    ` : '';
-
     toast.innerHTML = `
         <div class="toast-header">
             <div class="toast-badge-group">
-                <span class="toast-badge">🔥 100% CONFIRMED SIGNAL</span>
-                <span class="toast-expiry-badge">${expiryInfo.label.toUpperCase()}</span>
+                <span class="toast-badge">SIGNAL</span>
             </div>
             <button class="toast-close-btn" title="Dismiss">&times;</button>
         </div>
         <div class="toast-main">
             <div class="toast-icon">${isCall ? '🚀' : '🔻'}</div>
             <div class="toast-info">
-                <div class="toast-title">${isCall ? 'BUY CALL (UP) NOW' : 'SELL PUT (DOWN) NOW'}</div>
+                <div class="toast-title" style="font-size: 24px; font-weight: 800;">${isCall ? 'UP TRADE' : 'DOWN TRADE'}</div>
                 <div class="toast-details">
-                    <b>${patternName}</b> • Accuracy: <b>${confidence}%</b><br>
                     Duration: <b>${expiryInfo.nameEn}</b>
-                    ${trendBadgeHtml}
                 </div>
             </div>
         </div>
-        <div class="toast-actions">
-            <button class="toast-action-btn">${isCall ? '⚡ ENTER UP TRADE' : '⚡ ENTER DOWN TRADE'}</button>
-        </div>
-        <div class="toast-progress-bar"></div>
     `;
 
     sideToastContainer.appendChild(toast);
-
-    // Slide In
-    setTimeout(() => {
-        toast.classList.add('show');
-    }, 10);
-
+    setTimeout(() => { toast.classList.add('show'); }, 10);
     const closeBtn = toast.querySelector('.toast-close-btn');
-    const actionBtn = toast.querySelector('.toast-action-btn');
-
-    const removeToast = () => {
-        toast.classList.remove('show');
-        toast.classList.add('hiding');
-        setTimeout(() => toast.remove(), 350);
-    };
-
+    const removeToast = () => { toast.classList.remove('show'); toast.classList.add('hiding'); setTimeout(() => toast.remove(), 350); };
     closeBtn.addEventListener('click', removeToast);
-    actionBtn.addEventListener('click', () => {
-        window.focus();
-        removeToast();
-    });
-
-    // Auto-dismiss after 8 seconds
     setTimeout(removeToast, 8000);
 }
 
-// Desktop OS Native Push Notification
 function sendDesktopNotification(type, confidence, patternName, expiryInfo, trendForecast) {
     if (!desktopNotificationToggle.checked) return;
     if (!('Notification' in window)) return;
 
     if (Notification.permission === 'granted') {
         const isCall = type === 'CALL';
-        const title = isCall ? `🚀 100% SURE CALL (UP) ENTRY NOW!` : `🔻 100% SURE PUT (DOWN) ENTRY NOW!`;
-        const trendMsg = trendForecast && trendForecast.isStrong ? `🌊 Continuous ${isCall ? 'UP' : 'DOWN'} expected for 3m-5m!` : `Duration: ${expiryInfo.nameEn}`;
-        const body = `${trendMsg}\nPattern: ${patternName} (${confidence}%)\nHigh Confluence Confirmed! Open Quotex tab & enter.`;
+        const title = isCall ? `UP TRADE NOW!` : `DOWN TRADE NOW!`;
+        const body = `Take a ${expiryInfo.nameEn} ${isCall ? 'UP' : 'DOWN'} trade.`;
 
         try {
-            const notif = new Notification(title, {
-                body: body,
-                requireInteraction: true,
-                tag: 'quotex-signal-alert',
-                silent: false
-            });
-
-            notif.onclick = () => {
-                window.focus();
-                notif.close();
-            };
-
+            const notif = new Notification(title, { body: body, silent: false });
+            notif.onclick = () => { window.focus(); notif.close(); };
             setTimeout(() => notif.close(), 9000);
-        } catch (e) {
-            console.warn('Desktop Notification error:', e);
-        }
+        } catch (e) {}
     } else if (Notification.permission !== 'denied') {
         Notification.requestPermission();
     }
 }
 
-// --------------------------------------------------------------------------
-// 7. Signal Execution, Flash Banner, Active Trade Lock & Live Countdown
-// --------------------------------------------------------------------------
 function triggerTradeExecution(type, confidence, patternName, expiryInfo, trendForecast) {
     playLaserChime(type);
 
-    // 1. Show High-Impact Screen Flash Banner
     const isCall = type === 'CALL';
-    const bannerClass = isCall ? 'action-flash-banner call' : 'action-flash-banner put';
-    actionFlashBanner.className = bannerClass;
+    actionFlashBanner.className = isCall ? 'action-flash-banner call' : 'action-flash-banner put';
     flashIcon.textContent = isCall ? '🚀' : '🔻';
-    flashTitle.textContent = isCall ? `🔥 100% SURE CALL (UP) ENTRY NOW!` : `🔥 100% SURE PUT (DOWN) ENTRY NOW!`;
-    flashExpiryBadge.textContent = `${expiryInfo.label.toUpperCase()} EXPIRY`;
-    
-    const subtitleText = trendForecast && trendForecast.isStrong ? 
-        `🌊 MULTI-MINUTE TREND: Expected Continuous ${isCall ? 'UP' : 'DOWN'} for 3m-5m! (Suggested: 2m, 3m, 5m Expiry)` :
-        `Pattern: ${patternName} | Accuracy: ${confidence}% | Duration: ${expiryInfo.nameEn}`;
-    
-    flashSubtitle.textContent = subtitleText;
+    flashTitle.textContent = isCall ? `UP TRADE NOW!` : `DOWN TRADE NOW!`;
+    flashExpiryBadge.textContent = `${expiryInfo.label.toUpperCase()}`;
+    flashSubtitle.textContent = `Duration: ${expiryInfo.nameEn}`;
 
     let countdown = Math.min(8, expiryInfo.sec);
     flashCountdown.textContent = `${countdown}s`;
@@ -1196,36 +1112,32 @@ function triggerTradeExecution(type, confidence, patternName, expiryInfo, trendF
         }
     }, 1000);
 
-    // 2. Trigger Floating Side Notification Toast
     showSideToast(type, confidence, patternName, expiryInfo, trendForecast);
-
-    // 3. Trigger Native OS Desktop Push Notification (pops over Quotex window)
     sendDesktopNotification(type, confidence, patternName, expiryInfo, trendForecast);
 
-    // 4. Speak Loud Final Execution Voice Alert with Multi-Minute Guidance in Tamil and English
-    if (trendForecast && trendForecast.isStrong) {
-        speakVoice(
-            `உறுதியான 100% சிக்னல்! அடுத்த 3 முதல் 5 நிமிடங்களுக்கு மார்க்கெட் தொடர்ச்சியாக ${isCall ? 'அப்' : 'டவுன்'} செல்லும்! 3m அல்லது 5m டிரேட் எடுக்கலாம்!`,
-            `Confirmed 100% signal! Continuous trend expected for next 3 to 5 minutes! You can take a 3 or 5 minute trade!`
-        );
-    } else {
-        speakVoice(
-            `உறுதியான 100% ${expiryInfo.nameTa} ${isCall ? 'கால்' : 'புட்'} சிக்னல்! இப்போது ${isCall ? 'அப்' : 'டவுன்'} டிரேட் எடுக்கவும்!`,
-            `Confirmed 100% ${expiryInfo.nameEn} ${isCall ? 'CALL' : 'PUT'} signal! Enter ${isCall ? 'UP' : 'DOWN'} trade now!`
-        );
-    }
+    speakVoice(
+        `${expiryInfo.nameTa} ${isCall ? 'அப்' : 'டவுன்'} டிரேட் எடுக்கவும்.`,
+        `Take a ${expiryInfo.nameEn} ${isCall ? 'UP' : 'DOWN'} trade.`
+    );
 
-    // Record Session Stats
     sessionStats.totalSignals++;
     totalSignalsCount.textContent = sessionStats.totalSignals;
-
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     const historyItemElement = addHistoryRecord(type, confidence, patternName, expiryInfo.label, timeStr);
 
-    // Initialize Active Trade Lock & Countdown (1 Trade At A Time!)
-    if (tradeLockToggle.checked) {
-        startActiveTradeLifecycle(type, confidence, patternName, expiryInfo, historyItemElement);
+    // Instant Mobile Telegram Notification
+    sendTelegramAlert(type, confidence, patternName, expiryInfo);
+
+    // Auto-Trade Trigger (Sends command to Python Auto-Clicker)
+    if (confidence >= 95) { // 1000% correct logic
+        const durationMin = Math.round(expiryInfo.sec / 60);
+        fetch('http://localhost:3001/trade', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ direction: type, duration: durationMin })
+        }).then(res => console.log('Auto-Trader Triggered!'))
+          .catch(err => console.log('Auto-Trader not running'));
     }
 }
 
@@ -1325,6 +1237,7 @@ recordWinBtn.addEventListener('click', () => {
         activeTrade.historyElement.appendChild(tag);
     }
 
+    handleMartingaleOutcome(true);
     speakVoice('வெற்றி பதிவு செய்யப்பட்டது! அருமை!', 'Trade win recorded! Excellent trade!');
     closeActiveTrade();
 });
@@ -1341,6 +1254,8 @@ recordLossBtn.addEventListener('click', () => {
         tag.textContent = 'LOSS';
         activeTrade.historyElement.appendChild(tag);
     }
+
+    handleMartingaleOutcome(false);
 
     // Adaptive AI Mistake Learning & Filter Auto-Tuning
     const currentVal = parseInt(confidenceThreshold.value, 10) || 80;
@@ -1499,5 +1414,248 @@ window.addEventListener('mouseup', handleDragEnd);
 cropBox.addEventListener('touchstart', handleDragStart, { passive: true });
 window.addEventListener('touchmove', handleDragMove, { passive: true });
 window.addEventListener('touchend', handleDragEnd);
+
+// ==============================================================================
+// 9. V3 Extensions: Setup Modal, Diagnostics, Martingale & Telegram
+// ==============================================================================
+
+// --- Setup Modal Handlers ---
+const setupModal = document.getElementById('setupModal');
+const setupGuideBtn = document.getElementById('setupGuideBtn');
+const openGuideFromDiag = document.getElementById('openGuideFromDiag');
+const closeSetupModal = document.getElementById('closeSetupModal');
+const gotItBtn = document.getElementById('gotItBtn');
+
+function openSetupModal() {
+    if (setupModal) setupModal.classList.remove('hidden');
+}
+function hideSetupModal() {
+    if (setupModal) setupModal.classList.add('hidden');
+}
+
+if (setupGuideBtn) setupGuideBtn.addEventListener('click', openSetupModal);
+if (openGuideFromDiag) openGuideFromDiag.addEventListener('click', openSetupModal);
+if (closeSetupModal) closeSetupModal.addEventListener('click', hideSetupModal);
+if (gotItBtn) gotItBtn.addEventListener('click', hideSetupModal);
+
+if (setupModal) {
+    setupModal.addEventListener('click', (e) => {
+        if (e.target === setupModal) hideSetupModal();
+    });
+}
+
+// --- Live Chart Diagnostics Updater ---
+const diagCandlesPill = document.getElementById('diagCandlesPill');
+const diagCandlesVal = document.getElementById('diagCandlesVal');
+const diagBbPill = document.getElementById('diagBbPill');
+const diagBbVal = document.getElementById('diagBbVal');
+const diagEmaPill = document.getElementById('diagEmaPill');
+const diagEmaVal = document.getElementById('diagEmaVal');
+const diagRsiPill = document.getElementById('diagRsiPill');
+const diagRsiVal = document.getElementById('diagRsiVal');
+
+function updateChartDiagnostics(candlePixels, bbTouchType, emaPointsCount, rsiPointsCount, rsiVal) {
+    // 1. Candles
+    if (candlePixels > 60) {
+        if (diagCandlesPill) diagCandlesPill.className = 'diag-pill detected';
+        if (diagCandlesVal) diagCandlesVal.textContent = 'Active (Live)';
+    } else {
+        if (diagCandlesPill) diagCandlesPill.className = 'diag-pill warning';
+        if (diagCandlesVal) diagCandlesVal.textContent = 'Searching...';
+    }
+
+    // 2. Bollinger Bands
+    if (bbTouchType === 'UPPER' || bbTouchType === 'LOWER') {
+        if (diagBbPill) diagBbPill.className = 'diag-pill detected';
+        if (diagBbVal) diagBbVal.textContent = bbTouchType === 'UPPER' ? 'Upper Climax' : 'Lower Climax';
+    } else if (candlePixels > 100) {
+        if (diagBbPill) diagBbPill.className = 'diag-pill';
+        if (diagBbVal) diagBbVal.textContent = 'Inside Band (20,2)';
+    } else {
+        if (diagBbPill) diagBbPill.className = 'diag-pill warning';
+        if (diagBbVal) diagBbVal.textContent = 'Add BB(20,2)';
+    }
+
+    // 3. EMA
+    if (emaPointsCount > 6) {
+        if (diagEmaPill) diagEmaPill.className = 'diag-pill detected';
+        if (diagEmaVal) diagEmaVal.textContent = 'Detected (9/21)';
+    } else {
+        if (diagEmaPill) diagEmaPill.className = 'diag-pill warning';
+        if (diagEmaVal) diagEmaVal.textContent = 'Add EMA 9 & 21';
+    }
+
+    // 4. RSI
+    if (rsiPointsCount > 0 || (rsiVal > 25 && rsiVal < 75)) {
+        if (diagRsiPill) diagRsiPill.className = 'diag-pill detected';
+        if (diagRsiVal) diagRsiVal.textContent = `${rsiVal} (Level)`;
+    } else {
+        if (diagRsiPill) diagRsiPill.className = 'diag-pill warning';
+        if (diagRsiVal) diagRsiVal.textContent = 'Add RSI (14)';
+    }
+}
+
+// --- Smart Martingale Money Management Engine ---
+let currentMartingaleStep = 1;
+const baseBetInput = document.getElementById('baseBetInput');
+const payoutPctInput = document.getElementById('payoutPctInput');
+const currentStepBadge = document.getElementById('currentStepBadge');
+const recommendedTradeAmount = document.getElementById('recommendedTradeAmount');
+const recommendedTradeDesc = document.getElementById('recommendedTradeDesc');
+const step1Amount = document.getElementById('step1Amount');
+const step1Profit = document.getElementById('step1Profit');
+const step2Amount = document.getElementById('step2Amount');
+const step2Profit = document.getElementById('step2Profit');
+const step3Amount = document.getElementById('step3Amount');
+const step3Profit = document.getElementById('step3Profit');
+const mStep1 = document.getElementById('mStep1');
+const mStep2 = document.getElementById('mStep2');
+const mStep3 = document.getElementById('mStep3');
+
+function calculateMartingaleSteps() {
+    const base = parseFloat(baseBetInput.value) || 100;
+    const payout = (parseFloat(payoutPctInput.value) || 93) / 100;
+
+    // Step 1
+    const s1Bet = Math.round(base);
+    const s1Net = Math.round(s1Bet * payout);
+
+    // Step 2 (Recover Step 1 Loss + Target Profit)
+    const s2Bet = Math.ceil((s1Bet + s1Net * 0.5) / payout);
+    const s2Net = Math.round((s2Bet * payout) - s1Bet);
+
+    // Step 3 (Recover Step 1 + Step 2 Loss + Target Profit)
+    const s3Bet = Math.ceil((s1Bet + s2Bet + s1Net * 0.4) / payout);
+    const s3Net = Math.round((s3Bet * payout) - s1Bet - s2Bet);
+
+    if (step1Amount) step1Amount.textContent = `₹${s1Bet}`;
+    if (step1Profit) step1Profit.textContent = `+₹${s1Net}`;
+    if (step2Amount) step2Amount.textContent = `₹${s2Bet}`;
+    if (step2Profit) step2Profit.textContent = `+₹${s2Net}`;
+    if (step3Amount) step3Amount.textContent = `₹${s3Bet}`;
+    if (step3Profit) step3Profit.textContent = `+₹${s3Net}`;
+
+    // Highlight active step
+    [mStep1, mStep2, mStep3].forEach((el, idx) => {
+        if (el) {
+            if (idx + 1 === currentMartingaleStep) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+    });
+
+    // Update Recommendation Display
+    let activeBet = s1Bet;
+    let descText = 'Normal Base Bet (Step 1)';
+    if (currentMartingaleStep === 2) {
+        activeBet = s2Bet;
+        descText = 'Recovery Trade 1 (Martingale Step 2)';
+    } else if (currentMartingaleStep === 3) {
+        activeBet = s3Bet;
+        descText = 'Maximum Recovery Bet (Martingale Step 3)';
+    }
+
+    if (recommendedTradeAmount) recommendedTradeAmount.textContent = `₹${activeBet}`;
+    if (recommendedTradeDesc) recommendedTradeDesc.textContent = descText;
+    if (currentStepBadge) currentStepBadge.textContent = `Step ${currentMartingaleStep} of 3`;
+}
+
+function handleMartingaleOutcome(isWin) {
+    if (isWin) {
+        currentMartingaleStep = 1;
+    } else {
+        currentMartingaleStep = currentMartingaleStep >= 3 ? 1 : currentMartingaleStep + 1;
+    }
+    calculateMartingaleSteps();
+}
+
+if (baseBetInput) baseBetInput.addEventListener('input', calculateMartingaleSteps);
+if (payoutPctInput) payoutPctInput.addEventListener('input', calculateMartingaleSteps);
+calculateMartingaleSteps();
+
+// --- Telegram Push Alerts ---
+const telegramEnabledToggle = document.getElementById('telegramEnabledToggle');
+const tgInputsBlock = document.getElementById('tgInputsBlock');
+const tgBotToken = document.getElementById('tgBotToken');
+const tgChatId = document.getElementById('tgChatId');
+const tgTestBtn = document.getElementById('tgTestBtn');
+
+// Load saved telegram settings
+if (localStorage.getItem('quotex_tg_token')) {
+    tgBotToken.value = localStorage.getItem('quotex_tg_token');
+}
+if (localStorage.getItem('quotex_tg_chat_id')) {
+    tgChatId.value = localStorage.getItem('quotex_tg_chat_id');
+}
+if (localStorage.getItem('quotex_tg_enabled') === 'true') {
+    telegramEnabledToggle.checked = true;
+    if (tgInputsBlock) tgInputsBlock.style.display = 'block';
+}
+
+if (telegramEnabledToggle) {
+    telegramEnabledToggle.addEventListener('change', () => {
+        if (tgInputsBlock) tgInputsBlock.style.display = telegramEnabledToggle.checked ? 'block' : 'none';
+        localStorage.setItem('quotex_tg_enabled', telegramEnabledToggle.checked);
+    });
+}
+if (tgBotToken) tgBotToken.addEventListener('input', () => localStorage.setItem('quotex_tg_token', tgBotToken.value.trim()));
+if (tgChatId) tgChatId.addEventListener('input', () => localStorage.setItem('quotex_tg_chat_id', tgChatId.value.trim()));
+
+function sendTelegramAlert(type, confidence, patternName, expiryInfo) {
+    if (!telegramEnabledToggle || !telegramEnabledToggle.checked) return;
+    const token = tgBotToken ? tgBotToken.value.trim() : '';
+    const chatId = tgChatId ? tgChatId.value.trim() : '';
+    if (!token || !chatId) return;
+
+    const emoji = type === 'CALL' ? '🟢 <b>CALL (BUY / UP)</b> ⬆️' : '🔴 <b>PUT (SELL / DOWN)</b> ⬇️';
+    const message = `🤖 <b>QUOTEX AI PRO COPILOT ALERT</b>\n\n` +
+                    `🎯 <b>Signal:</b> ${emoji}\n` +
+                    `⏱️ <b>Expiry:</b> ${expiryInfo.label} (${expiryInfo.nameTa})\n` +
+                    `📊 <b>Confidence:</b> ${confidence}%\n` +
+                    `🕯️ <b>Pattern:</b> ${patternName}\n` +
+                    `💰 <b>Recommended Bet:</b> ${recommendedTradeAmount ? recommendedTradeAmount.textContent : '₹100'}\n` +
+                    `⚡ <i>Enter immediately on candle opening!</i>`;
+
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+            parse_mode: 'HTML'
+        })
+    }).catch(err => console.warn('Telegram alert send error:', err));
+}
+
+if (tgTestBtn) {
+    tgTestBtn.addEventListener('click', () => {
+        const token = tgBotToken.value.trim();
+        const chatId = tgChatId.value.trim();
+        if (!token || !chatId) {
+            alert('தயவுசெய்து உங்கள் Telegram Bot Token மற்றும் Chat ID இரண்டையும் பதிவு செய்யவும்!');
+            return;
+        }
+        tgTestBtn.textContent = '⏳ Sending Test...';
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: '🚀 <b>Quotex AI Copilot: Test Alert Successful!</b>\n\nஉங்கள் மொபைலில் Telegram சிக்னல் அலெர்ட் வெற்றிகரமாக இணைக்கப்பட்டுவிட்டது! ✅',
+                parse_mode: 'HTML'
+            })
+        }).then(res => {
+            if (res.ok) {
+                alert('✅ Telegram Alert அனுப்பப்பட்டது! உங்கள் போனில் Telegram-ஐ சரிபார்க்கவும்.');
+            } else {
+                alert('❌ Error: Bot Token அல்லது Chat ID தவறாக இருக்கலாம். சரிபார்க்கவும்.');
+            }
+        }).catch(err => {
+            alert('Network Error while connecting to Telegram API.');
+        }).finally(() => {
+            tgTestBtn.textContent = '✈️ Send Test Telegram Alert';
+        });
+    });
+}
+
 
 

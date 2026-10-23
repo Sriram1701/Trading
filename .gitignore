@@ -16,5 +16,6 @@ yarn-error.log*
 # IDE / System
 .vscode/
 .idea/
-.DS_Store
-Thumbs.db
+# Local Calibration
+coords.json
+*.log

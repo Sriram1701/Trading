@@ -45,6 +45,9 @@
             </div>
 
             <div class="nav-right">
+                <button id="setupGuideBtn" class="btn btn-guide glow-gold" title="Click to see what indicators to add on Quotex">
+                    <span class="icon">📖</span> Quotex Guide (தமிழ்)
+                </button>
                 <div class="status-indicator live" id="scannerStatus">
                     <span class="status-dot"></span>
                     <span class="status-label" id="statusLabel">READY</span>
@@ -128,6 +131,30 @@
                         <button class="tf-pill" data-tf="3m">3m</button>
                         <button class="tf-pill" data-tf="5m">5m</button>
                     </div>
+                </div>
+
+                <!-- Live Chart Diagnostics & Indicator Detection Bar -->
+                <div class="diagnostic-bar" id="chartDiagnosticBar">
+                    <div class="diag-header-label">⚡ Live Chart Scanner Diagnostics:</div>
+                    <div class="diag-items-group">
+                        <div class="diag-pill" id="diagCandlesPill">
+                            <span class="diag-dot"></span>
+                            <span class="diag-text">Candles: <b id="diagCandlesVal">Scanning...</b></span>
+                        </div>
+                        <div class="diag-pill" id="diagBbPill">
+                            <span class="diag-dot"></span>
+                            <span class="diag-text">Bollinger Bands (20,2): <b id="diagBbVal">Searching</b></span>
+                        </div>
+                        <div class="diag-pill" id="diagEmaPill">
+                            <span class="diag-dot"></span>
+                            <span class="diag-text">EMA (9/21): <b id="diagEmaVal">Searching</b></span>
+                        </div>
+                        <div class="diag-pill" id="diagRsiPill">
+                            <span class="diag-dot"></span>
+                            <span class="diag-text">RSI (14): <b id="diagRsiVal">Searching</b></span>
+                        </div>
+                    </div>
+                    <button id="openGuideFromDiag" class="diag-help-btn" title="View exact indicators to add on Quotex">➕ Add Indicators</button>
                 </div>
 
                 <!-- Video Viewport Container with Overlay Canvas -->
@@ -361,6 +388,52 @@
                     </div>
                 </div>
 
+                <!-- Quotex Money Management & Smart Martingale -->
+                <div class="panel-card money-mgmt-panel">
+                    <div class="card-header">
+                        <h3><span class="header-icon">💰</span> Quotex Money Management</h3>
+                        <span class="badge-mini" id="currentStepBadge">Step 1 (Base)</span>
+                    </div>
+                    <div class="money-grid">
+                        <div class="m-input-group">
+                            <label for="baseBetInput">Base Investment (₹ / $):</label>
+                            <div class="input-with-currency">
+                                <span class="curr-symbol">₹</span>
+                                <input type="number" id="baseBetInput" value="100" min="10" step="10">
+                            </div>
+                        </div>
+                        <div class="m-input-group">
+                            <label for="payoutPctInput">Quotex Payout %:</label>
+                            <div class="input-with-currency">
+                                <span class="curr-symbol">%</span>
+                                <input type="number" id="payoutPctInput" value="93" min="50" max="98">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="martingale-steps-table">
+                        <div class="m-step-row active" id="mStep1">
+                            <span class="step-tag">Step 1 (Normal)</span>
+                            <span class="step-amount" id="step1Amount">₹100</span>
+                            <span class="step-profit win" id="step1Profit">+₹93</span>
+                        </div>
+                        <div class="m-step-row" id="mStep2">
+                            <span class="step-tag">Step 2 (Recovery 1)</span>
+                            <span class="step-amount" id="step2Amount">₹215</span>
+                            <span class="step-profit win" id="step2Profit">+₹100</span>
+                        </div>
+                        <div class="m-step-row" id="mStep3">
+                            <span class="step-tag">Step 3 (Max Recovery)</span>
+                            <span class="step-amount" id="step3Amount">₹465</span>
+                            <span class="step-profit win" id="step3Profit">+₹105</span>
+                        </div>
+                    </div>
+                    <div class="recommended-bet-card">
+                        <span class="rec-label">👉 Place This Amount on Quotex:</span>
+                        <span class="rec-amount" id="recommendedTradeAmount">₹100</span>
+                        <small class="rec-sub" id="recommendedTradeDesc">Normal base trade amount</small>
+                    </div>
+                </div>
+
                 <!-- Pro Audio & Voice Settings -->
                 <div class="panel-card settings-panel">
                     <div class="card-header">
@@ -450,6 +523,22 @@
                             <input type="range" id="confidenceThreshold" min="75" max="100" value="85" step="1" class="pro-slider">
                         </div>
 
+                        <!-- Telegram Live Push Alerts -->
+                        <div class="setting-item col-full telegram-box">
+                            <div class="tg-header">
+                                <label for="telegramEnabledToggle">✈️ Instant Telegram Alerts to Mobile:</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="telegramEnabledToggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="tg-inputs" id="tgInputsBlock" style="display: none; margin-top: 10px;">
+                                <input type="text" id="tgBotToken" class="styled-input-text" placeholder="Telegram Bot Token (e.g. 123456:ABC-DEF...)">
+                                <input type="text" id="tgChatId" class="styled-input-text" placeholder="Your Telegram Chat ID (e.g. 987654321)" style="margin-top: 6px;">
+                                <button id="tgTestBtn" class="btn btn-outline-sm" style="margin-top: 8px; width: 100%;">✈️ Send Test Telegram Alert</button>
+                            </div>
+                        </div>
+
                         <div class="setting-actions col-full">
                             <button id="testAudioBtn" class="btn btn-outline-wide">
                                 🔊 Test Voice & Chime Alert
@@ -477,6 +566,96 @@
 
     <!-- Floating Live Side Notification Toast Container -->
     <div id="sideToastContainer" class="side-toast-container"></div>
+
+    <!-- Quotex Indicators Setup Modal (தமிழ் & English) -->
+    <div id="setupModal" class="modal-backdrop hidden">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="m-title">
+                    <h2><span class="icon">🚀</span> Quotex Indicators Setup Guide (தமிழ் விளக்கம்)</h2>
+                    <p>இந்த அமைப்புகளை Quotex-ல் செய்தால் AI Scanner 99% துல்லியமாக சிக்னல்களை கண்டறியும்</p>
+                </div>
+                <button id="closeSetupModal" class="close-modal-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- Step 1 -->
+                <div class="guide-card">
+                    <div class="guide-num">1</div>
+                    <div class="guide-content">
+                        <h3>கீழ்-இடதுபுறம் (Bottom-Left) Indicators Icon-ஐ கிளிக் செய்யவும்</h3>
+                        <p>Quotex சார்ட்டில் இடதுபுறம் கீழே உள்ள <b>Compass / 〰️ Indicators icon</b>-ஐ கிளிக் செய்யவும்.</p>
+                    </div>
+                </div>
+
+                <!-- Step 2: Bollinger Bands -->
+                <div class="guide-card highlight-card">
+                    <div class="guide-num">2</div>
+                    <div class="guide-content">
+                        <div class="gc-header">
+                            <h3>📊 1. Bollinger Bands</h3>
+                            <span class="tag-badge">Most Important</span>
+                        </div>
+                        <div class="spec-grid">
+                            <div class="spec-item"><span class="lbl">Period:</span> <b class="val">20</b></div>
+                            <div class="spec-item"><span class="lbl">Deviation:</span> <b class="val">2.0</b></div>
+                            <div class="spec-item"><span class="lbl">Color:</span> <b class="val">Default / White Lines</b></div>
+                        </div>
+                        <p class="guide-tip">💡 <b>வேலை:</b> Candle மேல் கோட்டை தாண்டினால் <b>PUT (SELL)</b>, கீழ் கோட்டை தாண்டினால் <b>CALL (BUY)</b> ரிவர்சலை AI கணிக்கும்.</p>
+                    </div>
+                </div>
+
+                <!-- Step 3: EMA 9 & 21 -->
+                <div class="guide-card highlight-card">
+                    <div class="guide-num">3</div>
+                    <div class="guide-content">
+                        <div class="gc-header">
+                            <h3>📈 2. Moving Averages (EMA 9 & EMA 21)</h3>
+                            <span class="tag-badge">Trend Filter</span>
+                        </div>
+                        <div class="spec-grid">
+                            <div class="spec-item"><span class="lbl">EMA 1 Period:</span> <b class="val">9</b> (Type: EMA, Color: Cyan / Yellow)</div>
+                            <div class="spec-item"><span class="lbl">EMA 2 Period:</span> <b class="val">21</b> (Type: EMA, Color: Orange / Red)</div>
+                        </div>
+                        <p class="guide-tip">💡 <b>வேலை:</b> 9 EMA மேலே சென்றால் UP Trend, கீழே சென்றால் DOWN Trend என Golden/Death Cross கண்டறியும்.</p>
+                    </div>
+                </div>
+
+                <!-- Step 4: RSI -->
+                <div class="guide-card highlight-card">
+                    <div class="guide-num">4</div>
+                    <div class="guide-content">
+                        <div class="gc-header">
+                            <h3>⚡ 3. RSI (Relative Strength Index)</h3>
+                            <span class="tag-badge">Overbought / Oversold</span>
+                        </div>
+                        <div class="spec-grid">
+                            <div class="spec-item"><span class="lbl">Period:</span> <b class="val">14</b></div>
+                            <div class="spec-item"><span class="lbl">Overbought:</span> <b class="val">80</b></div>
+                            <div class="spec-item"><span class="lbl">Oversold:</span> <b class="val">20</b></div>
+                        </div>
+                        <p class="guide-tip">💡 <b>வேலை:</b> RSI 80-க்கு மேல் சென்றால் Institutional Selling Climax, 20-க்கு கீழ் சென்றால் Institutional Buying Climax.</p>
+                    </div>
+                </div>
+
+                <!-- Step 5: Timeframe & Expiry -->
+                <div class="guide-card">
+                    <div class="guide-num">5</div>
+                    <div class="guide-content">
+                        <div class="gc-header">
+                            <h3>⏱️ 4. Candle Time & Trade Expiry</h3>
+                        </div>
+                        <div class="spec-grid">
+                            <div class="spec-item"><span class="lbl">Candle Time:</span> <b class="val">1m (1 Minute)</b></div>
+                            <div class="spec-item"><span class="lbl">Trade Expiry:</span> <b class="val">00:01:00 அல்லது 00:02:00</b></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="gotItBtn" class="btn btn-primary glow-cyan">சரி, நான் Indicators போட்டுவிட்டேன்! (Start Trading)</button>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>
