@@ -1,644 +1,358 @@
 <!DOCTYPE html>
-<html lang="ta">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Quotex AI Pro Copilot V2 - Advanced Screen Scanner & 90%+ Signal Engine</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0b1019">
+    <title>Quotex AI Trading Assistant — Live Screen Monitor</title>
+    <link rel="stylesheet" href="signal-assistant.css">
 </head>
 <body>
-    <div class="app-layout">
-        <!-- Top Pro Navigation Bar -->
-        <header class="top-nav">
-            <div class="nav-left">
-                <div class="logo-shield">
-                    <span class="shield-icon">🤖</span>
-                    <span class="pulse-ring"></span>
+    <div class="app-layout signal-app">
+        <header class="top-nav signal-header">
+            <a class="brand" href="/" aria-label="Quotex AI Copilot home">
+                <span class="brand-mark" aria-hidden="true">Q</span>
+                <span>Quotex AI Copilot</span>
+            </a>
+            <div class="header-status-group">
+                <div class="connection-status" role="status" aria-live="polite">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    <span id="visionModelStatus">Checking local Ollama…</span>
                 </div>
-                <div class="brand-info">
-                    <div class="brand-title">
-                        <h1>QUOTEX AI PRO COPILOT <span class="version-tag">v2.0 PRO</span></h1>
-                    </div>
-                    <p class="brand-tagline">Real-Time Computer Vision • Candlestick Geometry • Fast AI Signal Engine</p>
-                </div>
-            </div>
+                <span class="sound-indicator">Sound <strong id="soundStatus">Off</strong></span>
+                <button id="openHistoryBtn" class="history-button" type="button">History</button>
+                <details class="settings-menu">
+                    <summary aria-label="Open settings" title="Settings">⋯</summary>
+                    <div class="menu-panel">
+                        <details open>
+                            <summary>Sound &amp; voice alerts</summary>
+                            <div class="menu-section">
+                                <label class="sound-toggle" for="chimeEnabledToggle">
+                                    <input type="checkbox" id="chimeEnabledToggle" checked>
+                                    <span>Sound notifications (chimes)</span>
+                                </label>
+                                <button id="testAudioBtn" class="menu-button" type="button">Test sound</button>
 
-            <div class="nav-center">
-                <!-- Accuracy & Session Stats -->
-                <div class="stats-ribbon">
-                    <div class="stat-pill">
-                        <span class="stat-label">WIN RATE</span>
-                        <span class="stat-val win" id="sessionWinRate">100%</span>
-                    </div>
-                    <div class="stat-pill">
-                        <span class="stat-label">SIGNALS</span>
-                        <span class="stat-val" id="totalSignalsCount">0</span>
-                    </div>
-                    <div class="stat-pill">
-                        <span class="stat-label">W / L</span>
-                        <span class="stat-val"><span id="winCount" class="win">0</span> / <span id="lossCount" class="loss">0</span></span>
-                    </div>
-                </div>
-            </div>
+                                <label class="sound-toggle" for="voiceAlertsToggle">
+                                    <input type="checkbox" id="voiceAlertsToggle" checked>
+                                    <span>Voice alerts ("UP SIGNAL" / "DOWN SIGNAL")</span>
+                                </label>
+                                <button id="testVoiceBtn" class="menu-button" type="button">Test voice</button>
 
-            <div class="nav-right">
-                <button id="setupGuideBtn" class="btn btn-guide glow-gold" title="Click to see what indicators to add on Quotex">
-                    <span class="icon">📖</span> Quotex Guide (தமிழ்)
-                </button>
-                <div class="status-indicator live" id="scannerStatus">
-                    <span class="status-dot"></span>
-                    <span class="status-label" id="statusLabel">READY</span>
-                </div>
-                <div class="timer-card">
-                    <div class="clock-display" id="clockDisplay">00:00:00</div>
-                    <div class="countdown-bar-container">
-                        <div class="countdown-bar" id="countdownProgress"></div>
+                                <label class="sound-toggle" for="desktopNotificationsToggle">
+                                    <input type="checkbox" id="desktopNotificationsToggle">
+                                    <span>Desktop notifications</span>
+                                </label>
+                                <span id="notificationPermissionStatus" class="settings-status">Off</span>
+                                <p>UP and DOWN signals trigger distinct alert sounds and spoken voice announcements. WAIT is silent.</p>
+                            </div>
+                        </details>
+                        <details id="signalHistoryMenu">
+                            <summary>Signal history</summary>
+                            <div class="menu-section">
+                                <span id="validationStatus" class="validation-label">Live visual observation history</span>
+                                <div id="historyList" class="history-list">
+                                    <div class="history-empty">No signals recorded yet.</div>
+                                </div>
+                            </div>
+                        </details>
+                        <details>
+                            <summary>Data source status</summary>
+                            <div class="menu-section">
+                                <span id="visionSetupDetails" class="settings-status">Checking local Ollama…</span>
+                                <p>Live frames stay on this computer and are sent only to local Ollama (qwen3-vl:4b) at localhost:11434. No external AI APIs or paid cloud services are used.</p>
+                            </div>
+                        </details>
+                        <details>
+                            <summary>Application &amp; trade safety</summary>
+                            <div class="menu-section">
+                                <p>Manual observation only. This application never automates Quotex Buy/Sell clicks or places trades. All signals are unvalidated visual assistance.</p>
+                            </div>
+                        </details>
                     </div>
-                    <span class="candle-time-text" id="candleTimerText">New Candle in 60s</span>
-                </div>
+                </details>
             </div>
         </header>
 
-        <!-- Main Workspace -->
-        <main class="workspace-grid">
-            <!-- Left Panel: Live Stream, Interactive Calibration & Real-time Signal Banner -->
-            <div class="stream-panel">
-                <div class="toolbar-card">
-                    <div class="toolbar-left">
-                        <div class="control-group">
-                            <select id="mediaSourceSelect" class="styled-select highlight-select" title="Choose Video Input">
-                                <option value="screen" selected>💻 Desktop Screen Share</option>
-                                <option value="back-cam">📱 Mobile Rear Camera</option>
-                                <option value="front-cam">🤳 Mobile Front Camera</option>
-                            </select>
-                        </div>
-                        <button id="startStreamBtn" class="btn btn-primary glow-cyan">
-                            <span class="icon">🎥</span> Start Watcher
-                        </button>
-                        <button id="stopStreamBtn" class="btn btn-danger" disabled>
-                            <span class="icon">⏹</span> Stop
-                        </button>
-                        <div class="selector-dropdown-group">
-                            <button id="selectRoiBtn" class="btn btn-secondary" title="Select specific area of chart to scan">
-                                <span class="icon">📐</span> Set Chart Box
-                            </button>
-                            <button id="resetRoiBtn" class="btn btn-outline-sm" title="Reset Selection">Reset</button>
-                        </div>
+        <main class="assistant-main">
+            <!-- Live Screen Monitoring Section -->
+            <section class="live-monitor-panel" aria-labelledby="monitorTitle">
+                <!-- 1. AUTOMATIC LIVE MONITORING STATUS -->
+                <div class="auto-monitoring-banner" id="autoMonitoringBanner">
+                    <div class="auto-status-indicator">
+                        <span class="auto-status-dot" id="autoStatusDot"></span>
+                        <span class="auto-status-title" id="autoStatusTitle">Automatic Monitoring: Ready</span>
                     </div>
-                    <div class="toolbar-right">
-                        <div class="control-group">
-                            <span class="preset-label">⏱️ Target Expiry:</span>
-                            <select id="expiryTimeframeSelect" class="styled-select highlight-select" disabled>
-                                <option value="1m" selected>⚡ 1 Minute (Exclusive Strong Sniper)</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <span class="preset-label">Trading Strategy:</span>
-                            <select id="strategyModeSelect" class="styled-select highlight-select">
-                                <option value="confluence" selected>🔥 90-100% Ultra-Strong Sniper (5-Pillar Confluence)</option>
-                                <option value="reel">🎯 Reel 99% Strategy: BB(20,2) + RSI Climax + EMA Cross</option>
-                                <option value="reversal">⚡ Pure Bollinger Band + Pinbar Reversal</option>
-                                <option value="trend">📈 Strong EMA 9/21 Trend Flow</option>
-                            </select>
-                        </div>
+                    <span class="auto-status-sub" id="autoStatusSub">Starts automatically as soon as Quotex tab is shared</span>
+                </div>
+
+                <div class="live-monitor-heading">
+                    <h2 id="monitorTitle">Quotex Live Screen Monitor</h2>
+                    <span id="liveConnectionStatus" class="live-state" role="status" aria-live="polite">Disconnected</span>
+                </div>
+
+                <div class="live-monitor-actions">
+                    <button id="connectLiveScreenBtn" class="monitor-button connect-button" type="button">CONNECT LIVE SCREEN</button>
+                    <button id="startMonitoringBtn" class="monitor-button" type="button" disabled>START MONITORING</button>
+                    <button id="stopMonitoringBtn" class="monitor-button stop-button" type="button" disabled>STOP MONITORING</button>
+                    <label class="frame-interval" for="frameIntervalSelect">
+                        Interval
+                        <select id="frameIntervalSelect" class="styled-select-sm">
+                            <option value="1000">1.0s</option>
+                            <option value="1500" selected>1.5s</option>
+                            <option value="2000">2.0s</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="live-monitor-readouts">
+                    <span id="monitoringStatus" class="monitoring-status" role="status" aria-live="polite">Click CONNECT LIVE SCREEN to select Quotex browser tab.</span>
+                    <span>Last frame: <time id="lastFrameTimestamp">Not received</time></span>
+                </div>
+
+                <div class="live-telemetry-grid">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Analysis Started</span>
+                        <span id="analysisStartTime" class="telemetry-val">--:--:--</span>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Analysis Completed</span>
+                        <span id="analysisCompleteTime" class="telemetry-val">--:--:--</span>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Local Engine Latency</span>
+                        <span id="inferenceLatency" class="telemetry-val">--</span>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Frame Freshness</span>
+                        <span id="frameFreshness" class="telemetry-val">Screen disconnected</span>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">AI Status</span>
+                        <span id="aiProcessingStatus" class="telemetry-val">Idle</span>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Qwen Vision Latency</span>
+                        <span id="visionInferenceLatency" class="telemetry-val">Not invoked</span>
                     </div>
                 </div>
 
-                <!-- Active 1-Minute Expiry Badge -->
-                <div class="tf-ribbon-bar">
-                    <span class="tf-label">⚡ Active Expiry Mode:</span>
-                    <div class="tf-pill-group" id="tfPillGroup">
-                        <button class="tf-pill active" data-tf="1m">🔒 1-Minute Strong Signals Only (Locked)</button>
+                <div class="telemetry-breakdown" id="timingBreakdownBar" style="display:flex;gap:0.75rem;font-size:0.75rem;color:#8ba2b5;margin-top:0.4rem;padding:0.25rem 0.5rem;background:rgba(255,255,255,0.03);border-radius:4px;flex-wrap:wrap;">
+                    <span>Capture: <strong id="frameCaptureLatency">--</strong></span>
+                    <span>Extraction: <strong id="localExtractionLatency">--</strong></span>
+                    <span>Technical Engine: <strong id="technicalEngineLatency">--</strong></span>
+                    <span>Validation: <strong id="finalValidationLatency">--</strong></span>
+                    <span>Total Local: <strong id="localEngineLatency">--</strong></span>
+                </div>
+
+                <div id="livePreviewContainer" class="live-preview-container" hidden>
+                    <video id="liveScreenPreview" class="live-preview" playsinline muted></video>
+                </div>
+
+                <p id="chartObservationStatus" class="chart-observation-status" role="status" aria-live="polite">Waiting for a shared chart.</p>
+            </section>
+
+            <!-- 2. CURRENT SIGNAL Output Card -->
+            <section class="signal-card" aria-labelledby="signalDirection">
+                <span class="signal-eyebrow">HYBRID LIVE AI ANALYSIS · FAST LOCAL ENGINE + QWEN3-VL VERIFICATION</span>
+                <h1 id="signalDirection" class="signal-direction" data-direction="WAIT" aria-live="polite">WAIT</h1>
+                <p id="marketDataStatus" class="signal-reason" role="status" aria-live="polite">Waiting for live monitoring to start.</p>
+                
+                <!-- Trade Placement Confirmation (Optional User Manual Action) -->
+                <div id="tradeConfirmationBar" class="trade-confirmation-bar" style="display:none;">
+                    <div class="trade-confirm-prompt">
+                        <span class="prompt-icon">⚖️</span>
+                        <span>Did you manually enter this trade on Quotex?</span>
+                    </div>
+                    <div class="trade-confirm-buttons">
+                        <button type="button" id="confirmTradeTakenBtn" class="btn-confirm-trade">✓ Trade Taken</button>
+                        <button type="button" id="skipTradeTakenBtn" class="btn-skip-trade">Skip (Signal Only)</button>
                     </div>
                 </div>
 
-                <!-- Live Chart Diagnostics & Indicator Detection Bar -->
-                <div class="diagnostic-bar" id="chartDiagnosticBar">
-                    <div class="diag-header-label">⚡ Live Chart Scanner Diagnostics:</div>
-                    <div class="diag-items-group">
-                        <div class="diag-pill" id="diagCandlesPill">
-                            <span class="diag-dot"></span>
-                            <span class="diag-text">Candles: <b id="diagCandlesVal">Scanning...</b></span>
-                        </div>
-                        <div class="diag-pill" id="diagBbPill">
-                            <span class="diag-dot"></span>
-                            <span class="diag-text">Bollinger Bands (20,2): <b id="diagBbVal">Searching</b></span>
-                        </div>
-                        <div class="diag-pill" id="diagEmaPill">
-                            <span class="diag-dot"></span>
-                            <span class="diag-text">EMA (9/21): <b id="diagEmaVal">Searching</b></span>
-                        </div>
-                        <div class="diag-pill" id="diagRsiPill">
-                            <span class="diag-dot"></span>
-                            <span class="diag-text">RSI (14): <b id="diagRsiVal">Searching</b></span>
-                        </div>
-                    </div>
-                    <button id="openGuideFromDiag" class="diag-help-btn" title="View exact indicators to add on Quotex">➕ Add Indicators</button>
+                <div id="indicatorObservations" class="indicator-observations" aria-live="polite"></div>
+                <p id="analysisUncertainties" class="analysis-uncertainties"></p>
+                <p class="signal-timestamp">Last signal time: <time id="signalTimestamp">Not available</time></p>
+                <p class="manual-only-note">Informational live visual analysis · Processed locally by Ollama qwen3-vl:4b · No external data sent · Never places trades</p>
+            </section>
+
+            <!-- 3. SIGNAL OUTCOME TRACKER -->
+            <section class="analytics-card outcome-tracker-section" id="outcomeTrackerSection">
+                <div class="section-header">
+                    <h3>⚡ Signal Outcome Tracker &amp; Expiry Verification</h3>
+                    <span class="section-tag" id="pendingSignalsBadge">0 Pending Expiries</span>
                 </div>
+                <div id="pendingSignalsList" class="pending-signals-container">
+                    <p class="empty-state-text">No active signals awaiting expiry settlement.</p>
+                </div>
+            </section>
 
-                <!-- Video Viewport Container with Overlay Canvas -->
-                <div class="viewport-box" id="viewportBox">
-                    <video id="quotexVideo" autoplay playsinline muted></video>
-                    <canvas id="roiCanvas"></canvas>
-                    <canvas id="processingCanvas"></canvas>
-
-                    <!-- Interactive Drag-to-Select Box -->
-                    <div id="cropBox" class="crop-box hidden">
-                        <div class="crop-handle handle-tl"></div>
-                        <div class="crop-handle handle-tr"></div>
-                        <div class="crop-handle handle-bl"></div>
-                        <div class="crop-handle handle-br"></div>
-                        <div class="crop-header">
-                            <span class="crop-tag">🎯 Quotex Chart Scanner Active</span>
-                        </div>
+            <!-- 4. WIN / LOSS PERFORMANCE & 5. UP / DOWN ACCURACY -->
+            <section class="analytics-card performance-metrics-section">
+                <div class="section-header">
+                    <h3>📊 Verified Signal Performance</h3>
+                    <span class="section-tag verified-only-tag">Verified Outcomes Only (Unverified Excluded)</span>
+                </div>
+                
+                <div class="metrics-kpi-grid">
+                    <div class="kpi-card win-rate-card">
+                        <span class="kpi-label">Verified Win Rate</span>
+                        <span class="kpi-value highlight-accent" id="overallWinRate">--%</span>
+                        <span class="kpi-sub" id="winLossSub">0 Wins / 0 Losses</span>
                     </div>
-
-                    <!-- Stream Placeholder -->
-                    <div id="streamPlaceholder" class="stream-placeholder">
-                        <div class="placeholder-core">
-                            <div class="ai-orb">
-                                <div class="orb-inner"></div>
-                                <div class="orb-ring"></div>
-                            </div>
-                            <h2>Start Live Quotex Multi-Timeframe Watcher</h2>
-                            <p>Select your <b>Quotex Browser Tab</b>. The AI Pro engine scans candlestick geometry, rejection wicks, RSI 85/20 extremes, and calculates <b>100% Sure Entry Directions + Exact Expiry (5s, 10s, 30s, 1m, 2m, 3m, 5m) with Voice Announcements</b>.</p>
-                            <div class="feature-bullets">
-                                <span>⚡ 5s, 10s, 30s, 1m, 2m, 3m, 5m Multi-Expiry Detection</span>
-                                <span>🎯 100% High-Confluence 5-Pillar Rejection Engine</span>
-                                <span>🔊 Real-Time Tamil & English Voice Announcement (நேரடி குரல்)</span>
-                                <span>🛡️ Anti-Squeeze Fakeout Protection</span>
-                            </div>
-                        </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total Signals / Pending</span>
+                        <span class="kpi-value" id="totalSignalsCount">0</span>
+                        <span class="kpi-sub" id="signalsSub">0 Verified · 0 Unverified</span>
                     </div>
-
-                    <!-- High-Impact Live Alert Flash Banner -->
-                    <div id="actionFlashBanner" class="action-flash-banner hidden">
-                        <div class="flash-inner">
-                            <div class="flash-icon" id="flashIcon">🚀</div>
-                            <div class="flash-content">
-                                <div class="flash-title-row">
-                                    <div class="flash-title" id="flashTitle">STRONG CALL (UP) SIGNAL!</div>
-                                    <div class="flash-expiry-badge" id="flashExpiryBadge">1 MIN EXPIRY</div>
-                                </div>
-                                <div class="flash-subtitle" id="flashSubtitle">Entering on Next Candle</div>
-                            </div>
-                            <div class="flash-countdown" id="flashCountdown">05s</div>
-                        </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">UP Signal Accuracy</span>
+                        <span class="kpi-value text-up" id="upAccuracyVal">--%</span>
+                        <span class="kpi-sub" id="upAccuracySub">0 W / 0 L</span>
                     </div>
-
-                    <!-- Active Trade Live In-Progress HUD Overlay (Locked Scanner) -->
-                    <div id="activeTradeOverlay" class="active-trade-overlay hidden">
-                        <div class="active-trade-card">
-                            <div class="at-header">
-                                <div class="at-badge"><span class="lock-icon">🔒</span> ACTIVE TRADE LOCKED</div>
-                                <div class="at-expiry" id="activeTradeExpiryLabel">3 MIN TRADE</div>
-                            </div>
-                            <div class="at-body">
-                                <div class="at-icon" id="activeTradeIcon">🔻</div>
-                                <div class="at-info">
-                                    <div class="at-direction" id="activeTradeDirection">PUT (DOWN) IN PROGRESS</div>
-                                    <div class="at-desc" id="activeTradeDesc">Scanner is paused until this trade finishes. Next signal will be given after expiry!</div>
-                                </div>
-                                <div class="at-timer-block">
-                                    <span class="at-timer-label">TIME LEFT</span>
-                                    <span class="at-timer-val" id="activeTradeTimer">03:00</span>
-                                </div>
-                            </div>
-                            <div class="at-progress-bar-wrap">
-                                <div class="at-progress-bar" id="activeTradeProgressBar"></div>
-                            </div>
-                            <div class="at-actions">
-                                <div class="at-result-prompt">Trade Finished? Record Outcome:</div>
-                                <div class="at-btn-group">
-                                    <button id="recordWinBtn" class="btn btn-win-action">✅ Won Trade (Win)</button>
-                                    <button id="recordLossBtn" class="btn btn-loss-action">❌ Lost Trade (Loss)</button>
-                                    <button id="cancelTradeBtn" class="btn btn-outline-sm">Cancel / Unlock</button>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">DOWN Signal Accuracy</span>
+                        <span class="kpi-value text-down" id="downAccuracyVal">--%</span>
+                        <span class="kpi-sub" id="downAccuracySub">0 W / 0 L</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Rolling Performance</span>
+                        <span class="kpi-value" id="rolling10Val">--%</span>
+                        <span class="kpi-sub" id="rollingSub">Last 10: --% · Last 20: --%</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Manual User Trades</span>
+                        <span class="kpi-value" id="userTradesWinRate">--%</span>
+                        <span class="kpi-sub" id="userTradesSub">0 Taken (0W / 0L)</span>
                     </div>
                 </div>
+            </section>
 
-                <!-- Live Signal & Pattern HUD -->
-                <div class="signal-hud-v2" id="mainSignalHud">
-                    <div class="hud-main-status">
-                        <div class="hud-action-icon" id="hudActionIcon">⏳</div>
-                        <div class="hud-text-group">
-                            <div class="hud-signal-name" id="hudSignalTitle">SEARCHING FOR 100% SURE SETUP</div>
-                            <div class="hud-signal-sub" id="hudSignalReason">AI is analyzing price momentum, rejection wicks, RSI boundaries, and optimal expiry...</div>
-                        </div>
+            <!-- 6. ASSET-WISE & OTC vs REGULAR ANALYSIS -->
+            <section class="analytics-card asset-market-section">
+                <div class="section-header">
+                    <h3>🌐 Market &amp; Asset-Wise Breakdown</h3>
+                </div>
+                <div class="split-tables-grid">
+                    <div class="table-container">
+                        <h4 class="table-title">Asset Performance</h4>
+                        <table class="analytics-table" id="assetPerformanceTable">
+                            <thead>
+                                <tr>
+                                    <th>Asset</th>
+                                    <th>Signals</th>
+                                    <th>W / L</th>
+                                    <th>Win Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assetPerformanceBody">
+                                <tr><td colspan="4" class="empty-table-cell">No asset records yet.</td></tr>
+                            </tbody>
+                        </table>
                     </div>
-
-                    <div class="hud-metrics">
-                        <div class="metric-block">
-                            <span class="m-label">RECOMMENDED EXPIRY</span>
-                            <span class="m-value tag expiry-pill-badge" id="hudRecommendedExpiry">1 Min (60s)</span>
-                        </div>
-                        <div class="metric-block">
-                            <span class="m-label">SIGNAL CONFIDENCE</span>
-                            <span class="m-value highlight" id="hudConfidenceScore">--%</span>
-                        </div>
-                        <div class="metric-block">
-                            <span class="m-label">CANDLE PATTERN</span>
-                            <span class="m-value tag" id="hudDetectedPattern">Neutral</span>
-                        </div>
-                        <div class="metric-block">
-                            <span class="m-label">SUGGESTED TRADE</span>
-                            <span class="action-tag wait" id="hudActionTag">WAIT</span>
-                        </div>
+                    <div class="table-container">
+                        <h4 class="table-title">Market Type (OTC vs Regular)</h4>
+                        <table class="analytics-table" id="marketPerformanceTable">
+                            <thead>
+                                <tr>
+                                    <th>Market</th>
+                                    <th>Signals</th>
+                                    <th>W / L</th>
+                                    <th>Win Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="marketPerformanceBody">
+                                <tr><td colspan="4" class="empty-table-cell">No market records yet.</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
+            </section>
 
-                <!-- Pro Live Indicators Gauge Ribbon (Reel Strategy Engine) -->
-                <div class="indicators-live-ribbon">
-                    <div class="ind-card">
-                        <div class="ind-header">
-                            <span class="ind-icon">📊</span>
-                            <span class="ind-title">Bollinger Bands (20,2)</span>
-                        </div>
-                        <div class="ind-val" id="indBbStatus">Inside Band</div>
-                        <div class="ind-sub" id="indBbSub">Band Deviation Normal</div>
+            <!-- 7. RECENT SIGNAL HISTORY -->
+            <section class="analytics-card recent-history-section">
+                <div class="section-header">
+                    <h3>📜 Recent Signal History</h3>
+                    <span class="section-tag">Persistent SQLite Database</span>
+                </div>
+                <div class="history-table-container">
+                    <table class="analytics-table history-table" id="signalsHistoryTable">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Asset</th>
+                                <th>Direction</th>
+                                <th>Setup &amp; Confluence</th>
+                                <th>Traded</th>
+                                <th>Outcome</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="signalsHistoryBody">
+                            <tr><td colspan="7" class="empty-table-cell">No signals recorded in database.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 8. ERROR ANALYSIS & MISTAKES (LOSS INVESTIGATION) -->
+            <section class="analytics-card error-analysis-section">
+                <div class="section-header">
+                    <h3>🔍 Wrong Signal Error Analysis (Loss Investigation)</h3>
+                    <span class="section-tag warning-tag">Identified Weaknesses</span>
+                </div>
+                <div id="mistakesContainer" class="mistakes-container">
+                    <p class="empty-state-text">No wrong signal records logged. Error analysis populates automatically upon verified losses.</p>
+                </div>
+            </section>
+
+            <!-- 9. CONTINUOUS LEARNING & STRATEGY VERSION HISTORY -->
+            <section class="analytics-card learning-strategy-section">
+                <div class="section-header">
+                    <h3>🧠 Continuous Learning &amp; Strategy Governance</h3>
+                    <span class="section-tag" id="activeStrategyBadge">Active: v1.1.0-hybrid</span>
+                </div>
+                <div class="learning-info-box">
+                    <div class="learning-progress-row">
+                        <span id="learningStatusMessage">Collecting verified outcomes...</span>
+                        <strong id="learningSampleCount">0 / 20 Samples</strong>
                     </div>
-
-                    <div class="ind-card">
-                        <div class="ind-header">
-                            <span class="ind-icon">⚡</span>
-                            <span class="ind-title">RSI (14) Level [80/20]</span>
-                        </div>
-                        <div class="ind-val highlight" id="indRsiStatus">50.0 (Neutral)</div>
-                        <div class="ind-sub" id="indRsiSub">Overbought >80 / Oversold <20</div>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill" id="learningProgressBar" style="width: 0%;"></div>
                     </div>
-
-                    <div class="ind-card">
-                        <div class="ind-header">
-                            <span class="ind-icon">📈</span>
-                            <span class="ind-title">EMA Flow (9/21/50)</span>
-                        </div>
-                        <div class="ind-val" id="indEmaStatus">Mixed Trend</div>
-                        <div class="ind-sub" id="indEmaSub">Scanning Golden / Death Cross</div>
-                    </div>
-
-                    <div class="ind-card">
-                        <div class="ind-header">
-                            <span class="ind-icon">🕯️</span>
-                            <span class="ind-title">Rejection Wick Ratio</span>
-                        </div>
-                        <div class="ind-val" id="indWickStatus">-- %</div>
-                        <div class="ind-sub" id="indWickSub">Min 35% Wick Required for 99% Entry</div>
+                    <p class="learning-safety-note">
+                        🛡️ <strong>Learning Safety Policy:</strong> Strategy thresholds are never altered automatically after a single loss to prevent overfitting. Rule evaluations require a minimum of 20 verified outcomes.
+                    </p>
+                    <div class="strategy-actions-row">
+                        <span>Current Strategy: <strong>v1.1.0-hybrid (Independent Confluence + Completed Candle Close)</strong></span>
+                        <button type="button" id="rollbackStrategyBtn" class="btn-rollback-strategy">Rollback to v1.0.0-legacy</button>
                     </div>
                 </div>
-            </div>
-
-            <!-- Right Sidebar: 5-Pillar Confluence, Voice & Audio Settings, Live Logs -->
-            <div class="sidebar-panel">
-                <!-- AI Confluence Scanner Card -->
-                <div class="panel-card confluence-panel">
-                    <div class="card-header">
-                        <h3><span class="header-icon">🎯</span> Fast AI Signal Scanner</h3>
-                        <span class="badge-mini" id="confluencePassedBadge">Active Engine</span>
-                    </div>
-
-                    <div class="pillars-container">
-                        <div class="pillar-row" id="pillarTrend">
-                            <div class="p-info">
-                                <span class="p-icon">📉</span>
-                                <div class="p-text">
-                                    <strong>1. Major Trend Alignment</strong>
-                                    <small id="pillarTrendDesc">Checking EMA 50 Slope & Bias</small>
-                                </div>
-                            </div>
-                            <span class="p-status" id="pillarTrendStatus">Checking...</span>
-                        </div>
-
-                        <div class="pillar-row" id="pillarSqueeze">
-                            <div class="p-info">
-                                <span class="p-icon">🔒</span>
-                                <div class="p-text">
-                                    <strong>2. Anti-Squeeze & Volatility Filter</strong>
-                                    <small id="pillarSqueezeDesc">Filtering flat/choppy consolidation</small>
-                                </div>
-                            </div>
-                            <span class="p-status" id="pillarSqueezeStatus">Checking...</span>
-                        </div>
-
-                        <div class="pillar-row" id="pillarLevel">
-                            <div class="p-info">
-                                <span class="p-icon">🧱</span>
-                                <div class="p-text">
-                                    <strong>3. Bollinger Band (20,2) Extreme Zone</strong>
-                                    <small id="pillarLevelDesc">Validating upper/lower outer band pierce</small>
-                                </div>
-                            </div>
-                            <span class="p-status" id="pillarLevelStatus">Checking...</span>
-                        </div>
-
-                        <div class="pillar-row" id="pillarRsi">
-                            <div class="p-info">
-                                <span class="p-icon">⚡</span>
-                                <div class="p-text">
-                                    <strong>4. Institutional RSI (14) Climax</strong>
-                                    <small id="pillarRsiDesc">Deep Overbought (>80) / Oversold (<20)</small>
-                                </div>
-                            </div>
-                            <span class="p-status" id="pillarRsiStatus">Checking...</span>
-                        </div>
-
-                        <div class="pillar-row" id="pillarPattern">
-                            <div class="p-info">
-                                <span class="p-icon">🕯️</span>
-                                <div class="p-text">
-                                    <strong>5. Long Rejection Wick (Pinbar/Wick >= 35%)</strong>
-                                    <small id="pillarPatternDesc">Hammer / Shooting Star / Rejection Confirmation</small>
-                                </div>
-                            </div>
-                            <span class="p-status" id="pillarPatternStatus">Checking...</span>
-                        </div>
-
-                        <div class="pillar-row" id="pillarTiming">
-                            <div class="p-info">
-                                <span class="p-icon">⏱️</span>
-                                <div class="p-text">
-                                    <strong>6. Precision 00:00 Candle Open Sync</strong>
-                                    <small id="pillarTimingDesc">Synchronized for next candle opening</small>
-                                </div>
-                            </div>
-                            <span class="p-status" id="pillarTimingStatus">Synchronizing...</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quotex Money Management & Smart Martingale -->
-                <div class="panel-card money-mgmt-panel">
-                    <div class="card-header">
-                        <h3><span class="header-icon">💰</span> Quotex Money Management</h3>
-                        <span class="badge-mini" id="currentStepBadge">Step 1 (Base)</span>
-                    </div>
-                    <div class="money-grid">
-                        <div class="m-input-group">
-                            <label for="baseBetInput">Base Investment (₹ / $):</label>
-                            <div class="input-with-currency">
-                                <span class="curr-symbol">₹</span>
-                                <input type="number" id="baseBetInput" value="100" min="10" step="10">
-                            </div>
-                        </div>
-                        <div class="m-input-group">
-                            <label for="payoutPctInput">Quotex Payout %:</label>
-                            <div class="input-with-currency">
-                                <span class="curr-symbol">%</span>
-                                <input type="number" id="payoutPctInput" value="93" min="50" max="98">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="martingale-steps-table">
-                        <div class="m-step-row active" id="mStep1">
-                            <span class="step-tag">Step 1 (Normal)</span>
-                            <span class="step-amount" id="step1Amount">₹100</span>
-                            <span class="step-profit win" id="step1Profit">+₹93</span>
-                        </div>
-                        <div class="m-step-row" id="mStep2">
-                            <span class="step-tag">Step 2 (Recovery 1)</span>
-                            <span class="step-amount" id="step2Amount">₹215</span>
-                            <span class="step-profit win" id="step2Profit">+₹100</span>
-                        </div>
-                        <div class="m-step-row" id="mStep3">
-                            <span class="step-tag">Step 3 (Max Recovery)</span>
-                            <span class="step-amount" id="step3Amount">₹465</span>
-                            <span class="step-profit win" id="step3Profit">+₹105</span>
-                        </div>
-                    </div>
-                    <div class="recommended-bet-card">
-                        <span class="rec-label">👉 Place This Amount on Quotex:</span>
-                        <span class="rec-amount" id="recommendedTradeAmount">₹100</span>
-                        <small class="rec-sub" id="recommendedTradeDesc">Normal base trade amount</small>
-                    </div>
-                </div>
-
-                <!-- Pro Audio & Voice Settings -->
-                <div class="panel-card settings-panel">
-                    <div class="card-header">
-                        <h3><span class="header-icon">🔊</span> Voice & Sound Settings</h3>
-                    </div>
-
-                    <div class="settings-grid">
-                        <div class="setting-item">
-                            <label for="sniperModeToggle">🎯 100% Ultra Confluence Mode:</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="sniperModeToggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label for="tradeLockToggle">Trade Lock (1 Trade At A Time):</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="tradeLockToggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label for="otcFilterToggle">OTC Anti-Spike Trap Filter:</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="otcFilterToggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label for="roundNumberFilterToggle">Round Number S/R Filter:</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="roundNumberFilterToggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label for="desktopNotificationToggle">🖥️ Desktop / OS Push Notification:</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="desktopNotificationToggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label for="voiceEnabledToggle">Voice Speech (குரல் அறிவிப்பு):</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="voiceEnabledToggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label for="chimeEnabledToggle">Laser Audio Chimes:</label>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="chimeEnabledToggle" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="setting-item">
-                            <label for="voiceLanguage">Voice Language:</label>
-                            <select id="voiceLanguage" class="styled-select-sm">
-                                <option value="ta" selected>Tamil / Tanglish (தமிழ்)</option>
-                                <option value="en">English (Ultra Clear)</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item">
-                            <label for="cooldownSecSelect">Post-Trade Cooldown:</label>
-                            <select id="cooldownSecSelect" class="styled-select-sm">
-                                <option value="15">15 Seconds</option>
-                                <option value="30">30 Seconds</option>
-                                <option value="45" selected>45 Seconds (Anti-Spam Filter)</option>
-                                <option value="60">60 Seconds (Full Retest Wait)</option>
-                            </select>
-                        </div>
-
-                        <div class="setting-item col-full">
-                            <div class="slider-header">
-                                <label for="confidenceThreshold">Min Signal Confidence (Strong Filter):</label>
-                                <span class="slider-num" id="thresholdValueDisplay">90%</span>
-                            </div>
-                            <input type="range" id="confidenceThreshold" min="85" max="100" value="90" step="1" class="pro-slider">
-                        </div>
-
-                        <!-- Telegram Live Push Alerts -->
-                        <div class="setting-item col-full telegram-box">
-                            <div class="tg-header">
-                                <label for="telegramEnabledToggle">✈️ Instant Telegram Alerts to Mobile:</label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="telegramEnabledToggle">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                            <div class="tg-inputs" id="tgInputsBlock" style="display: none; margin-top: 10px;">
-                                <input type="text" id="tgBotToken" class="styled-input-text" placeholder="Telegram Bot Token (e.g. 123456:ABC-DEF...)">
-                                <input type="text" id="tgChatId" class="styled-input-text" placeholder="Your Telegram Chat ID (e.g. 987654321)" style="margin-top: 6px;">
-                                <button id="tgTestBtn" class="btn btn-outline-sm" style="margin-top: 8px; width: 100%;">✈️ Send Test Telegram Alert</button>
-                            </div>
-                        </div>
-
-                        <div class="setting-actions col-full">
-                            <button id="testAudioBtn" class="btn btn-outline-wide">
-                                🔊 Test Voice & Chime Alert
-                            </button>
-                            <button id="testNotificationBtn" class="btn btn-outline-wide" style="margin-top: 8px;">
-                                🔔 Test Side & Desktop Notification
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Signal History Log -->
-                <div class="panel-card log-panel">
-                    <div class="card-header">
-                        <h3><span class="header-icon">📋</span> Signal Performance Log</h3>
-                        <button id="clearHistoryBtn" class="btn-text">Clear</button>
-                    </div>
-                    <div class="history-list" id="historyList">
-                        <div class="history-empty">No trading signals triggered yet. Monitoring chart...</div>
-                    </div>
-                </div>
-            </div>
+            </section>
         </main>
+
+        <footer class="bottom-controls" aria-label="Inactive directional controls">
+            <button type="button" class="direction-button up-button" disabled aria-disabled="true">UP</button>
+            <button type="button" class="direction-button down-button" disabled aria-disabled="true">DOWN</button>
+            <span>These controls are inactive; visual analysis is for manual observation only and never automates trade clicks.</span>
+        </footer>
     </div>
 
-    <!-- Floating Live Side Notification Toast Container -->
-    <div id="sideToastContainer" class="side-toast-container"></div>
-
-    <!-- Quotex Indicators Setup Modal (தமிழ் & English) -->
-    <div id="setupModal" class="modal-backdrop hidden">
-        <div class="modal-dialog">
-            <div class="modal-header">
-                <div class="m-title">
-                    <h2><span class="icon">🚀</span> Quotex Indicators Setup Guide (தமிழ் விளக்கம்)</h2>
-                    <p>இந்த அமைப்புகளை Quotex-ல் செய்தால் AI Scanner 99% துல்லியமாக சிக்னல்களை கண்டறியும்</p>
-                </div>
-                <button id="closeSetupModal" class="close-modal-btn">✕</button>
-            </div>
-            <div class="modal-body">
-                <!-- Step 1 -->
-                <div class="guide-card">
-                    <div class="guide-num">1</div>
-                    <div class="guide-content">
-                        <h3>கீழ்-இடதுபுறம் (Bottom-Left) Indicators Icon-ஐ கிளிக் செய்யவும்</h3>
-                        <p>Quotex சார்ட்டில் இடதுபுறம் கீழே உள்ள <b>Compass / 〰️ Indicators icon</b>-ஐ கிளிக் செய்யவும்.</p>
-                    </div>
-                </div>
-
-                <!-- Step 2: Bollinger Bands -->
-                <div class="guide-card highlight-card">
-                    <div class="guide-num">2</div>
-                    <div class="guide-content">
-                        <div class="gc-header">
-                            <h3>📊 1. Bollinger Bands</h3>
-                            <span class="tag-badge">Most Important</span>
-                        </div>
-                        <div class="spec-grid">
-                            <div class="spec-item"><span class="lbl">Period:</span> <b class="val">20</b></div>
-                            <div class="spec-item"><span class="lbl">Deviation:</span> <b class="val">2.0</b></div>
-                            <div class="spec-item"><span class="lbl">Color:</span> <b class="val">Default / White Lines</b></div>
-                        </div>
-                        <p class="guide-tip">💡 <b>வேலை:</b> Candle மேல் கோட்டை தாண்டினால் <b>PUT (SELL)</b>, கீழ் கோட்டை தாண்டினால் <b>CALL (BUY)</b> ரிவர்சலை AI கணிக்கும்.</p>
-                    </div>
-                </div>
-
-                <!-- Step 3: EMA 9 & 21 -->
-                <div class="guide-card highlight-card">
-                    <div class="guide-num">3</div>
-                    <div class="guide-content">
-                        <div class="gc-header">
-                            <h3>📈 2. Moving Averages (EMA 9 & EMA 21)</h3>
-                            <span class="tag-badge">Trend Filter</span>
-                        </div>
-                        <div class="spec-grid">
-                            <div class="spec-item"><span class="lbl">EMA 1 Period:</span> <b class="val">9</b> (Type: EMA, Color: Cyan / Yellow)</div>
-                            <div class="spec-item"><span class="lbl">EMA 2 Period:</span> <b class="val">21</b> (Type: EMA, Color: Orange / Red)</div>
-                        </div>
-                        <p class="guide-tip">💡 <b>வேலை:</b> 9 EMA மேலே சென்றால் UP Trend, கீழே சென்றால் DOWN Trend என Golden/Death Cross கண்டறியும்.</p>
-                    </div>
-                </div>
-
-                <!-- Step 4: RSI -->
-                <div class="guide-card highlight-card">
-                    <div class="guide-num">4</div>
-                    <div class="guide-content">
-                        <div class="gc-header">
-                            <h3>⚡ 3. RSI (Relative Strength Index)</h3>
-                            <span class="tag-badge">Overbought / Oversold</span>
-                        </div>
-                        <div class="spec-grid">
-                            <div class="spec-item"><span class="lbl">Period:</span> <b class="val">14</b></div>
-                            <div class="spec-item"><span class="lbl">Overbought:</span> <b class="val">80</b></div>
-                            <div class="spec-item"><span class="lbl">Oversold:</span> <b class="val">20</b></div>
-                        </div>
-                        <p class="guide-tip">💡 <b>வேலை:</b> RSI 80-க்கு மேல் சென்றால் Institutional Selling Climax, 20-க்கு கீழ் சென்றால் Institutional Buying Climax.</p>
-                    </div>
-                </div>
-
-                <!-- Step 5: Timeframe & Expiry -->
-                <div class="guide-card">
-                    <div class="guide-num">5</div>
-                    <div class="guide-content">
-                        <div class="gc-header">
-                            <h3>⏱️ 4. Candle Time & Trade Expiry</h3>
-                        </div>
-                        <div class="spec-grid">
-                            <div class="spec-item"><span class="lbl">Candle Time:</span> <b class="val">1m (1 Minute)</b></div>
-                            <div class="spec-item"><span class="lbl">Trade Expiry:</span> <b class="val">00:01:00 அல்லது 00:02:00</b></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="gotItBtn" class="btn btn-primary glow-cyan">சரி, நான் Indicators போட்டுவிட்டேன்! (Start Trading)</button>
-            </div>
-        </div>
-    </div>
-
+    <script src="chart_observer.js"></script>
+    <script src="local_chart_extractor.js"></script>
+    <script src="local_technical_engine.js"></script>
+    <script src="final_signal_validator.js"></script>
+    <script src="signal_history.js"></script>
+    <script src="signal_notifications.js"></script>
+    <script src="signal_outcome_tracker.js"></script>
     <script src="app.js"></script>
+    <script src="live_screen_monitor.js"></script>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.LiveScreenMonitor && typeof window.LiveScreenMonitor.mount === 'function') {
+                window.liveScreenMonitor = window.LiveScreenMonitor.mount(window);
+            }
+        });
+    </script>
 </body>
 </html>

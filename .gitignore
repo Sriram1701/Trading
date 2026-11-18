@@ -19,3 +19,9 @@ yarn-error.log*
 # Local Calibration
 coords.json
 *.log
+data/market_data.sqlite3
+data/market_data.sqlite3-shm
+data/market_data.sqlite3-wal
+*.db
+*.db-shm
+*.db-wal

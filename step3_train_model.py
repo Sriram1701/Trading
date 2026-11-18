@@ -38,6 +38,7 @@ from sklearn.metrics import (
 )
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from step2_data_prep import validate_ohlcv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,6 +59,19 @@ def load_and_prepare_dataset(csv_path: str = "cad_jpy_1m_features.csv"):
     df = pd.read_csv(csv_path)
     logger.info(f"Loaded {len(df)} rows from {csv_path}.")
 
+    if "source" not in df.columns:
+        raise ValueError(
+            "Dataset has no source/provenance column. Regenerate it with step2_data_prep.py; "
+            "unverified or legacy datasets cannot be trained."
+        )
+
+    df = validate_ohlcv(df)
+    source = str(df["source"].iloc[0])
+    if source == "synthetic":
+        raise ValueError("Synthetic data is for explicit demonstrations only and cannot enter model training.")
+    if source not in {"yfinance", "mt5"}:
+        raise ValueError(f"Unsupported training data source: {source!r}.")
+
     # Define Target: Next 1-minute candle direction (Up = 1, Down = 0)
     df["target"] = np.where(df["close"].shift(-1) > df["close"], 1, 0)
     
@@ -65,7 +79,7 @@ def load_and_prepare_dataset(csv_path: str = "cad_jpy_1m_features.csv"):
     df = df.iloc[:-1].copy()
 
     # Define candidate feature columns
-    excluded_cols = ["timestamp", "open", "high", "low", "close", "volume", "target"]
+    excluded_cols = ["timestamp", "open", "high", "low", "close", "volume", "source", "target"]
     feature_cols = [c for c in df.columns if c not in excluded_cols and pd.api.types.is_numeric_dtype(df[c])]
 
     logger.info(f"Using {len(feature_cols)} features: {feature_cols}")

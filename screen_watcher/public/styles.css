@@ -1541,8 +1541,8 @@ input:checked + .slider:before {
     box-shadow: 0 0 12px var(--neon-cyan-glow);
 }
 
-/* Money Management Panel */
-.money-mgmt-panel {
+/* Educational risk notice */
+.risk-notice-panel {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: 18px;
@@ -1550,126 +1550,6 @@ input:checked + .slider:before {
     display: flex;
     flex-direction: column;
     gap: 14px;
-}
-.money-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-.m-input-group label {
-    display: block;
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-bottom: 5px;
-    font-weight: 600;
-}
-.input-with-currency {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-.curr-symbol {
-    position: absolute;
-    left: 10px;
-    color: var(--neon-cyan);
-    font-weight: 700;
-    font-size: 13px;
-}
-.input-with-currency input {
-    width: 100%;
-    padding: 8px 10px 8px 26px;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    color: #fff;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    font-weight: 700;
-}
-.martingale-steps-table {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.m-step-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
-    font-size: 12px;
-    border-left: 3px solid transparent;
-    transition: all 0.2s ease;
-}
-.m-step-row.active {
-    background: rgba(0, 242, 254, 0.08);
-    border-left-color: var(--neon-cyan);
-    box-shadow: inset 0 0 15px rgba(0, 242, 254, 0.05);
-}
-.step-tag {
-    color: var(--text-secondary);
-}
-.step-amount {
-    font-family: var(--font-mono);
-    font-weight: 700;
-    color: #fff;
-}
-.step-profit {
-    font-family: var(--font-mono);
-    font-weight: 600;
-}
-.recommended-bet-card {
-    background: linear-gradient(135deg, rgba(0, 230, 118, 0.12), rgba(0, 242, 254, 0.1));
-    border: 1px solid rgba(0, 230, 118, 0.35);
-    border-radius: 12px;
-    padding: 12px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-.rec-label {
-    font-size: 11px;
-    color: var(--text-secondary);
-    font-weight: 600;
-    text-transform: uppercase;
-}
-.rec-amount {
-    font-size: 26px;
-    font-weight: 900;
-    font-family: var(--font-mono);
-    color: var(--neon-green);
-    text-shadow: 0 0 15px var(--neon-green-glow);
-}
-.rec-sub {
-    font-size: 11px;
-    color: var(--text-muted);
-}
-
-/* Telegram push block */
-.telegram-box {
-    background: rgba(0, 136, 204, 0.06);
-    border: 1px solid rgba(0, 136, 204, 0.25);
-    border-radius: 12px;
-    padding: 12px;
-}
-.tg-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 13px;
-    font-weight: 600;
-}
-.styled-input-text {
-    width: 100%;
-    padding: 8px 12px;
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    color: #fff;
-    font-size: 12px;
-    font-family: var(--font-mono);
 }
 
 /* Setup Modal */
@@ -1821,5 +1701,83 @@ input:checked + .slider:before {
     border-top: 1px solid var(--border-subtle);
     display: flex;
     justify-content: flex-end;
+}
+
+.market-data-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.market-data-warning,
+.market-data-status,
+.market-data-timestamp,
+.market-mtf,
+.market-indicators {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.market-data-warning,
+.market-data-diagnostic {
+    color: var(--neon-amber);
+}
+
+.market-data-controls {
+    display: grid;
+    grid-template-columns: minmax(88px, 0.7fr) minmax(130px, 1.3fr);
+    align-items: center;
+    gap: 8px;
+}
+
+.market-data-controls label {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.market-data-controls button {
+    grid-column: 1 / -1;
+}
+
+.market-data-status {
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: rgba(8, 14, 26, 0.7);
+}
+
+.market-api-online {
+    background: var(--neon-green-bg) !important;
+    color: var(--neon-green) !important;
+}
+
+.market-candle-chart {
+    display: block;
+    width: 100%;
+    height: 260px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+}
+
+.market-mtf,
+.market-indicators {
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: rgba(8, 14, 26, 0.5);
+    overflow-wrap: anywhere;
+}
+
+.market-mtf-item {
+    display: block;
+    margin-top: 5px;
+}
+
+.market-data-diagnostic {
+    margin-top: 4px;
 }
 

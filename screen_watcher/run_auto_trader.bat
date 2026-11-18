@@ -1,7 +1,4 @@
 @echo off
-echo Starting Quotex Auto-Trader AI...
-py auto_trader.py
-if %errorlevel% neq 0 (
-    python auto_trader.py
-)
-pause
+echo Automatic broker interaction is disabled in this project.
+echo No process was started.
+exit /b 0

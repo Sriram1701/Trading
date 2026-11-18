@@ -1,5 +1,5 @@
 //@version=5
-strategy("Quotex AI 6-Pillar Confluence Scalping Strategy", shorttitle="Quotex AI 6-Pillar Scalper", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=10, commission_type=strategy.commission.percent, commission_value=0.01)
+strategy("CADJPY Experimental Rule Strategy (Unvalidated)", shorttitle="CADJPY Unvalidated", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=10, commission_type=strategy.commission.percent, commission_value=0.01)
 
 // ==========================================
 // 1. INPUT SETTINGS & PARAMETERS
@@ -56,7 +56,7 @@ rsiValue = ta.rsi(close, rsiLen)
 atrValue = ta.atr(atrLen)
 
 // ==========================================
-// 3. STRICT 6-PILLAR CONFLUENCE LOGIC
+// 3. Experimental rule conditions (not independently validated)
 // ==========================================
 // 1. Major Trend Filter (EMA 200)
 bullishTrend = close > trendEma
@@ -97,8 +97,8 @@ plot(bbLower, title="Lower BB", color=color.new(#00E676, 50), linewidth=1)
 fill(plot(bbUpper), plot(bbLower), color=color.new(#00E5FF, 95), title="BB Channel Fill")
 
 // Plot Buy / Sell Arrows on Chart
-plotshape(buyCondition, title="BUY Signal Arrow", style=shape.triangleup, location=location.belowbar, color=color.new(#00E676, 0), size=size.normal, text="BUY 90%+", textcolor=color.white)
-plotshape(sellCondition, title="SELL Signal Arrow", style=shape.triangledown, location=location.abovebar, color=color.new(#FF1744, 0), size=size.normal, text="SELL 90%+", textcolor=color.white)
+plotshape(buyCondition, title="Unvalidated BUY Rule", style=shape.triangleup, location=location.belowbar, color=color.new(#00E676, 0), size=size.normal, text="BUY", textcolor=color.white)
+plotshape(sellCondition, title="Unvalidated SELL Rule", style=shape.triangledown, location=location.abovebar, color=color.new(#FF1744, 0), size=size.normal, text="SELL", textcolor=color.white)
 
 // Background highlight on signal
 bgcolor(buyCondition ? color.new(#00E676, 85) : sellCondition ? color.new(#FF1744, 85) : na, title="Signal Background Highlight")
@@ -129,6 +129,6 @@ if sellCondition
 // ==========================================
 // 6. TRADINGVIEW WEBHOOK / ALERT CONDITIONS
 // ==========================================
-alertcondition(buyCondition, title="Quotex AI BUY Alert", message="QUOTEX 90%+ BUY SIGNAL! EMA 200 Trend + ADX>25 + EMA 9/21 + RSI + BB Lower Bounce @ {{close}}")
-alertcondition(sellCondition, title="Quotex AI SELL Alert", message="QUOTEX 90%+ SELL SIGNAL! EMA 200 Trend + ADX>25 + EMA 9/21 + RSI + BB Upper Rejection @ {{close}}")
+alertcondition(buyCondition, title="Unvalidated BUY rule", message="Unvalidated CADJPY BUY rule; not a verified prediction @ {{close}}")
+alertcondition(sellCondition, title="Unvalidated SELL rule", message="Unvalidated CADJPY SELL rule; not a verified prediction @ {{close}}")
 

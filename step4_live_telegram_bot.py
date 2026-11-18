@@ -1,13 +1,13 @@
 """
 ==============================================================================
-Step 4: Real-Time 1-Minute CAD/JPY Market Monitor & Telegram Alert Bot
+Step 4: Experimental CAD/JPY Data Monitor & Telegram Notifications
 ==============================================================================
-Fetches real-time 1-minute market data for CAD/JPY every 60 seconds, calculates
-the live indicator features, feeds them into the trained ML model, and sends
-high-probability signals (>80% confidence) directly to Telegram.
+This prototype polls a configured data source and can send model outputs to
+Telegram. Data timing/instrument equivalence and model performance are not
+validated; model probabilities are not calibrated confidence or accuracy.
 
 Features:
-- Configurable probability threshold (default 80% / 0.80)
+- Configurable model-output threshold (not a calibrated probability)
 - Smart deduplication (avoids repeated alerts for the same 1m bar)
 - Rich HTML formatted Telegram alert messages
 - Real-time indicator diagnostics (Price, RSI, EMA 9/21, MACD, Probabilities)
@@ -17,7 +17,7 @@ Usage:
     # 1. Test Telegram Connection:
     uv run python step4_live_telegram_bot.py --test-alert
 
-    # 2. Run Live Real-Time Bot:
+    # 2. Run the experimental monitor (not validated for trading):
     uv run python step4_live_telegram_bot.py --model cad_jpy_model.joblib --threshold 0.82
 
     # 3. Dry-Run Mode (Console only without Telegram dispatch):
@@ -81,18 +81,16 @@ def send_telegram_message(bot_token: str, chat_id: str, message: str) -> bool:
 
 
 def format_alert_message(symbol: str, signal_type: str, prob: float, price: float, rsi: float, ema9: float, ema21: float, macd_hist: float, bar_time: str) -> str:
-    """Formats a sleek, high-visibility HTML message for Telegram."""
-    emoji = "🚀 <b>STRONG BUY (UP)</b>" if signal_type == "UP" else "🔻 <b>STRONG SELL (DOWN)</b>"
-    direction_badge = "🟢 CALL / BUY" if signal_type == "UP" else "🔴 PUT / SELL"
+    """Formats an explicitly unvalidated model-output notice for Telegram."""
+    direction = "UP" if signal_type == "UP" else "DOWN"
     
     msg = (
-        f"⚡ <b>AI TRADING SIGNAL ALERT</b> ⚡\n"
+        f"⚠️ <b>EXPERIMENTAL MODEL OUTPUT — NOT VALIDATED</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"📊 <b>Pair:</b> <code>{symbol}</code>\n"
-        f"⏱ <b>Timeframe:</b> <code>1-Minute (Next Candle)</code>\n"
-        f"🎯 <b>Signal:</b> {emoji}\n"
-        f"📈 <b>Action:</b> <b>{direction_badge}</b>\n"
-        f"🔥 <b>AI Confidence:</b> <code>{prob * 100:.1f}%</code>\n"
+        f"⏱ <b>Model horizon:</b> <code>Next 1-minute candle</code>\n"
+        f"🧪 <b>Model output:</b> <code>{direction}</code>\n"
+        f"📉 <b>Uncalibrated model score:</b> <code>{prob * 100:.1f}%</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💵 <b>Current Price:</b> <code>{price:.3f}</code>\n"
         f"📊 <b>RSI (14):</b> <code>{rsi:.1f}</code>\n"
@@ -100,7 +98,7 @@ def format_alert_message(symbol: str, signal_type: str, prob: float, price: floa
         f"🌊 <b>MACD Hist:</b> <code>{macd_hist:+.4f}</code>\n"
         f"⏰ <b>Candle Time:</b> <code>{bar_time}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🤖 <i>Automated CAD/JPY 1M AI Predictor</i>"
+        f"⚠️ <i>Not a verified probability, accuracy estimate, or trading instruction.</i>"
     )
     return msg
 
@@ -238,7 +236,7 @@ def run_bot(model_path: str, bot_token: str, chat_id: str, threshold: float, sym
     feature_cols = bundle["feature_cols"]
 
     logger.info(f"Loaded {bundle.get('model_type', 'ML')} model with {len(feature_cols)} features.")
-    logger.info(f"Starting Live Monitor for {symbol} | Alert Threshold: >= {threshold * 100:.0f}%")
+    logger.info(f"Starting experimental monitor for {symbol} | Uncalibrated model-score threshold: >= {threshold * 100:.0f}%")
     if dry_run:
         logger.info("⚠️ DRY-RUN MODE: Alerts will be logged to console without sending to Telegram.")
 
@@ -277,10 +275,10 @@ def run_bot(model_path: str, bot_token: str, chat_id: str, threshold: float, sym
 
             logger.info(
                 f"[{bar_time}] Price: {current_price:.3f} | RSI: {rsi_val:.1f} | "
-                f"EMA 9/21: {ema9_val:.3f}/{ema21_val:.3f} | Prob UP: {prob_up*100:.1f}% | Prob DOWN: {prob_down*100:.1f}%"
+                f"EMA 9/21: {ema9_val:.3f}/{ema21_val:.3f} | Uncalibrated model score UP: {prob_up*100:.1f}% | DOWN: {prob_down*100:.1f}%"
             )
 
-            # 4. Check Probability Threshold
+            # The model scores are not calibrated and are not estimates of accuracy.
             signal = None
             signal_prob = 0.0
 
@@ -306,7 +304,7 @@ def run_bot(model_path: str, bot_token: str, chat_id: str, threshold: float, sym
                 )
 
                 print("\n" + "=" * 60)
-                print(f"🚨 HIGH PROBABILITY SIGNAL DETECTED: {signal} ({signal_prob*100:.1f}%)")
+                print(f"UNVALIDATED MODEL OUTPUT: {signal} (uncalibrated model score {signal_prob*100:.1f}%)")
                 print("=" * 60)
                 print(alert_text)
                 print("=" * 60 + "\n")
@@ -317,7 +315,7 @@ def run_bot(model_path: str, bot_token: str, chat_id: str, threshold: float, sym
                 last_alerted_bar_time = bar_time
             else:
                 if signal is None:
-                    logger.debug(f"Confidence below threshold {threshold*100:.0f}%. No alert dispatched.")
+                    logger.debug(f"Model score below configured threshold {threshold*100:.0f}%. No alert dispatched.")
 
             if once:
                 break
@@ -338,7 +336,7 @@ def run_bot(model_path: str, bot_token: str, chat_id: str, threshold: float, sym
 def main():
     parser = argparse.ArgumentParser(description="CAD/JPY Live Telegram Alert Bot")
     parser.add_argument("--model", type=str, default="cad_jpy_model.joblib", help="Path to trained joblib model")
-    parser.add_argument("--threshold", type=float, default=float(os.getenv("PROBABILITY_THRESHOLD", "0.82")), help="Confidence threshold (e.g. 0.82 for 82%%)")
+    parser.add_argument("--threshold", type=float, default=float(os.getenv("PROBABILITY_THRESHOLD", "0.82")), help="Uncalibrated model-score filter (not accuracy or confidence)")
     parser.add_argument("--symbol", type=str, default=os.getenv("SYMBOL", "CADJPY=X"), help="Ticker symbol")
     parser.add_argument("--token", type=str, default=os.getenv("TELEGRAM_BOT_TOKEN", ""), help="Telegram Bot Token")
     parser.add_argument("--chat-id", type=str, default=os.getenv("TELEGRAM_CHAT_ID", ""), help="Telegram Chat ID")

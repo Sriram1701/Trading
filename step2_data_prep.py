@@ -2,10 +2,10 @@
 ==============================================================================
 Step 2: Data Collection & Feature Engineering for CAD/JPY 1-Minute Scalping
 ==============================================================================
-Downloads 1-minute historical OHLCV candle data for CAD/JPY via yfinance 
-(or MetaTrader 5 / synthetic simulation fallback), computes core technical 
-indicators (RSI, EMAs, MACD, Bollinger Bands, ATR, Candlestick geometry), 
-and exports a clean CSV.
+Downloads 1-minute OHLCV data from an explicitly selected source, validates
+timestamps and candle values, computes technical indicators, and exports CSV.
+Synthetic data is available only through the explicit synthetic source option
+and is labeled so the model-training step can reject it.
 
 Usage:
     python step2_data_prep.py
@@ -28,6 +28,63 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger("DataPrep")
+
+OHLCV_COLUMNS = ["timestamp", "open", "high", "low", "close", "volume", "source"]
+
+
+def validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
+    """Validate one-minute bars and require an explicit source label."""
+    if df is None or df.empty:
+        raise ValueError("Market data is empty; refusing to continue.")
+
+    missing_columns = [column for column in OHLCV_COLUMNS if column not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Market data is missing required columns: {missing_columns}")
+
+    data = df.copy()
+    data["timestamp"] = pd.to_datetime(data["timestamp"], utc=True, errors="coerce")
+    if data["timestamp"].isna().any():
+        raise ValueError("Market data contains invalid or missing timestamps.")
+    if data["timestamp"].duplicated().any():
+        raise ValueError("Market data contains duplicate timestamps.")
+    if not data["timestamp"].is_monotonic_increasing:
+        raise ValueError("Market data timestamps must be in ascending order.")
+
+    price_columns = ["open", "high", "low", "close"]
+    for column in price_columns + ["volume"]:
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+        values = data[column].to_numpy(dtype=float)
+        if not np.isfinite(values).all():
+            raise ValueError(f"Market data contains missing or non-finite {column} values.")
+
+    prices = data[price_columns]
+    if (prices <= 0).any().any():
+        raise ValueError("OHLC prices must be greater than zero.")
+    invalid_ohlc = (
+        (data["high"] < data[["open", "close", "low"]].max(axis=1))
+        | (data["low"] > data[["open", "close", "high"]].min(axis=1))
+    )
+    if invalid_ohlc.any():
+        raise ValueError("Market data contains invalid OHLC relationships.")
+    if (data["volume"] < 0).any():
+        raise ValueError("Volume must not be negative.")
+
+    sources = data["source"].astype("string").str.strip()
+    if sources.isna().any() or (sources == "").any():
+        raise ValueError("Every candle must include a non-empty source/provenance label.")
+    if sources.nunique() != 1:
+        raise ValueError("A dataset must contain exactly one source; mixed provenance is not allowed.")
+    data["source"] = sources
+
+    gaps = data["timestamp"].diff().dropna()
+    if (gaps != pd.Timedelta(minutes=1)).any():
+        gap_count = int((gaps != pd.Timedelta(minutes=1)).sum())
+        raise ValueError(
+            f"Market data has {gap_count} missing or non-minute candle interval(s); "
+            "provide a contiguous one-minute segment."
+        )
+
+    return data.reset_index(drop=True)
 
 
 def fetch_data_yfinance(symbol: str = "CADJPY=X", period: str = "7d", interval: str = "1m", timeout: int = 6) -> pd.DataFrame:
@@ -68,12 +125,11 @@ def fetch_data_yfinance(symbol: str = "CADJPY=X", period: str = "7d", interval: 
 
     for col in ["open", "high", "low", "close", "volume"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    if pd.api.types.is_datetime64tz_dtype(df["timestamp"]):
-        df["timestamp"] = df["timestamp"].dt.tz_localize(None)
+    df["source"] = "yfinance"
+    df = validate_ohlcv(df)
 
     logger.info(f"Successfully downloaded {len(df)} 1-minute bars from {df['timestamp'].min()} to {df['timestamp'].max()}")
-    return df[["timestamp", "open", "high", "low", "close", "volume"]]
+    return df[OHLCV_COLUMNS]
 
 
 def fetch_data_mt5(symbol: str = "CADJPY", timeframe_bars: int = 5000) -> pd.DataFrame:
@@ -83,26 +139,27 @@ def fetch_data_mt5(symbol: str = "CADJPY", timeframe_bars: int = 5000) -> pd.Dat
     try:
         import MetaTrader5 as mt5
     except ImportError:
-        logger.warning("MetaTrader5 library not installed.")
-        return None
+        raise RuntimeError("MetaTrader5 is not installed; no market data was retrieved.")
 
     if not mt5.initialize():
-        logger.warning(f"MT5 initialization failed: {mt5.last_error()}.")
-        return None
+        raise RuntimeError(f"MT5 initialization failed: {mt5.last_error()}.")
 
     logger.info(f"Connected to MetaTrader 5. Fetching {timeframe_bars} 1-min bars for {symbol}...")
-    rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, timeframe_bars)
-    mt5.shutdown()
+    try:
+        rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, timeframe_bars)
+    finally:
+        mt5.shutdown()
 
     if rates is None or len(rates) == 0:
-        logger.warning(f"No rates returned from MT5 for {symbol}.")
-        return None
+        raise ValueError(f"No one-minute rates returned from MT5 for {symbol}.")
 
     df = pd.DataFrame(rates)
-    df["timestamp"] = pd.to_datetime(df["time"], unit="s")
+    df["timestamp"] = pd.to_datetime(df["time"], unit="s", utc=True)
     df.rename(columns={"tick_volume": "volume"}, inplace=True)
+    df["source"] = "mt5"
+    df = validate_ohlcv(df)
     logger.info(f"Fetched {len(df)} bars from MT5.")
-    return df[["timestamp", "open", "high", "low", "close", "volume"]]
+    return df[OHLCV_COLUMNS]
 
 
 def create_synthetic_sample_data(num_bars: int = 3000) -> pd.DataFrame:
@@ -138,14 +195,16 @@ def create_synthetic_sample_data(num_bars: int = 3000) -> pd.DataFrame:
         volumes.append(vol)
         price = close_p
 
-    return pd.DataFrame({
+    data = pd.DataFrame({
         "timestamp": timestamps,
         "open": opens,
         "high": highs,
         "low": lows,
         "close": closes,
-        "volume": volumes
+        "volume": volumes,
+        "source": "synthetic"
     })
+    return validate_ohlcv(data)
 
 
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -159,7 +218,7 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     - Candlestick Micro-Structure (Body ratio, Upper/Lower wicks, Returns)
     """
     logger.info("Calculating Technical Indicators (RSI, EMAs, MACD, Bollinger Bands, ATR)...")
-    data = df.copy()
+    data = validate_ohlcv(df)
 
     # 1. EMAs (EMA 9, EMA 21, EMA 200 Major Trend Filter)
     data["ema_9"] = data["close"].ewm(span=9, adjust=False).mean()
@@ -256,29 +315,14 @@ def main():
     parser.add_argument("--output", type=str, default="cad_jpy_1m_features.csv", help="Output CSV path")
     args = parser.parse_args()
 
-    raw_df = None
     if args.source == "mt5":
         raw_df = fetch_data_mt5(args.symbol.replace("=X", ""))
-    elif args.source == "yfinance":
-        try:
-            raw_df = fetch_data_yfinance(args.symbol, period=args.period)
-        except Exception as e:
-            logger.warning(f"yfinance fetch failed: {e}. Falling back to synthetic simulation...")
-            raw_df = create_synthetic_sample_data(args.bars)
     elif args.source == "synthetic":
         raw_df = create_synthetic_sample_data(args.bars)
-    else:  # auto
-        try:
-            raw_df = fetch_data_yfinance(args.symbol, period=args.period, timeout=5)
-        except Exception as e:
-            logger.info(f"Auto-fetch yfinance not reachable ({e}). Using high-fidelity synthetic market data.")
-            raw_df = create_synthetic_sample_data(args.bars)
+    else:
+        raw_df = fetch_data_yfinance(args.symbol, period=args.period, timeout=5)
 
-    if raw_df is None or raw_df.empty:
-        logger.info("Generating fallback synthetic dataset...")
-        raw_df = create_synthetic_sample_data(args.bars)
-
-    featured_df = calculate_indicators(raw_df)
+    featured_df = calculate_indicators(validate_ohlcv(raw_df))
     featured_df.to_csv(args.output, index=False)
     logger.info(f"✅ Finished! Feature dataset saved to '{args.output}' ({len(featured_df)} rows, {len(featured_df.columns)} columns).")
     print("\n--- Sample Features Head ---")
