@@ -155,7 +155,15 @@
             <!-- 2. CURRENT SIGNAL Output Card -->
             <section class="signal-card" aria-labelledby="signalDirection">
                 <span class="signal-eyebrow">HYBRID LIVE AI ANALYSIS · FAST LOCAL ENGINE + QWEN3-VL VERIFICATION</span>
-                <h1 id="signalDirection" class="signal-direction" data-direction="WAIT" aria-live="polite">WAIT</h1>
+                <div class="signal-header-row">
+                    <h1 id="signalDirection" class="signal-direction" data-direction="WAIT" aria-live="polite">WAIT</h1>
+                    <span id="signalStrengthBadge" class="signal-strength-badge wait" data-strength="WAIT">WAIT</span>
+                </div>
+                <div class="signal-sub-badges" id="signalSubBadges">
+                    <span id="trendDirectionBadge" class="sub-badge">Trend: --</span>
+                    <span id="momentumDirectionBadge" class="sub-badge">Momentum: --</span>
+                    <span id="volatilityDirectionBadge" class="sub-badge">Volatility: --</span>
+                </div>
                 <p id="marketDataStatus" class="signal-reason" role="status" aria-live="polite">Waiting for live monitoring to start.</p>
                 
                 <!-- Trade Placement Confirmation (Optional User Manual Action) -->
@@ -214,6 +222,16 @@
                         <span class="kpi-label">DOWN Signal Accuracy</span>
                         <span class="kpi-value text-down" id="downAccuracyVal">--%</span>
                         <span class="kpi-sub" id="downAccuracySub">0 W / 0 L</span>
+                    </div>
+                    <div class="kpi-card directional-balance-card">
+                        <span class="kpi-label">UP Candidates / Approved</span>
+                        <span class="kpi-value text-up"><span id="upCandidatesCount">0</span> / <span id="upApprovedCount">0</span></span>
+                        <span class="kpi-sub" id="upApprovalRateSub">0% Approved</span>
+                    </div>
+                    <div class="kpi-card directional-balance-card">
+                        <span class="kpi-label">DOWN Candidates / Approved</span>
+                        <span class="kpi-value text-down"><span id="downCandidatesCount">0</span> / <span id="downApprovedCount">0</span></span>
+                        <span class="kpi-sub" id="downApprovalRateSub">0% Approved</span>
                     </div>
                     <div class="kpi-card">
                         <span class="kpi-label">Rolling Performance</span>

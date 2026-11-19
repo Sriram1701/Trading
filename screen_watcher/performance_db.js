@@ -71,6 +71,16 @@ class PerformanceDB {
                 analyzed_at TEXT,
                 FOREIGN KEY (signal_id) REFERENCES signals(id)
             );
+
+            CREATE TABLE IF NOT EXISTS candidate_audit (
+                id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                candidate TEXT NOT NULL,
+                approved INTEGER NOT NULL,
+                signal_strength TEXT,
+                rejection_reason TEXT,
+                candle_id TEXT
+            );
         `);
 
         // Seed initial strategy versions if not present
@@ -288,6 +298,42 @@ class PerformanceDB {
         );
     }
 
+    recordCandidate(candidateData) {
+        if (!candidateData || !candidateData.candidate) return;
+        const stmt = this.db.prepare(`
+            INSERT INTO candidate_audit (id, timestamp, candidate, approved, signal_strength, rejection_reason, candle_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        stmt.run(
+            candidateData.id || `CAND-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            candidateData.timestamp || new Date().toISOString(),
+            candidateData.candidate,
+            candidateData.approved ? 1 : 0,
+            candidateData.signalStrength || candidateData.signal_strength || 'WAIT',
+            candidateData.rejectionReason || candidateData.rejection_reason || null,
+            candidateData.candleId || candidateData.candle_id || null
+        );
+    }
+
+    categorizeRejection(reason, breakdown) {
+        if (!reason) {
+            breakdown.other += 1;
+            return;
+        }
+        const lower = reason.toLowerCase();
+        if (lower.includes('confirmation is missing') || lower.includes('missing')) {
+            breakdown.missingConfirmation += 1;
+        } else if (lower.includes('conflicting') || lower.includes('opposes')) {
+            breakdown.conflictingIndicators += 1;
+        } else if (lower.includes('awaiting confirmed candle') || lower.includes('forming') || lower.includes('unconfirmed')) {
+            breakdown.unconfirmedCandle += 1;
+        } else if (lower.includes('exhaustion') || lower.includes('overbought') || lower.includes('oversold')) {
+            breakdown.exhaustionRisk += 1;
+        } else {
+            breakdown.other += 1;
+        }
+    }
+
     getPerformanceMetrics() {
         const rows = this.db.prepare('SELECT * FROM signals ORDER BY entry_timestamp DESC').all();
         const signals = rows.map(r => this.deserializeSignal(r));
@@ -455,6 +501,55 @@ class PerformanceDB {
             ? `Sufficient verified sample size (${totalDecided} verified trades). Walk-forward learning active for strategy ${activeStrategy}.`
             : `Insufficient sample to learn reliably (${totalDecided} / ${minSamplesRequired} verified outcomes). Collecting evidence before rule adjustment.`;
 
+        // Directional Candidate and Verification Analytics
+        let totalUpCandidates = 0;
+        let totalDownCandidates = 0;
+        let approvedUpSignals = 0;
+        let approvedDownSignals = 0;
+        let rejectedUpCandidates = 0;
+        let rejectedDownCandidates = 0;
+        const rejectionBreakdown = {
+            missingConfirmation: 0,
+            conflictingIndicators: 0,
+            unconfirmedCandle: 0,
+            exhaustionRisk: 0,
+            other: 0
+        };
+
+        try {
+            const candidateRows = this.db.prepare('SELECT * FROM candidate_audit').all();
+            for (const c of candidateRows) {
+                if (c.candidate === 'UP') {
+                    totalUpCandidates += 1;
+                    if (c.approved) approvedUpSignals += 1;
+                    else {
+                        rejectedUpCandidates += 1;
+                        this.categorizeRejection(c.rejection_reason, rejectionBreakdown);
+                    }
+                } else if (c.candidate === 'DOWN') {
+                    totalDownCandidates += 1;
+                    if (c.approved) approvedDownSignals += 1;
+                    else {
+                        rejectedDownCandidates += 1;
+                        this.categorizeRejection(c.rejection_reason, rejectionBreakdown);
+                    }
+                }
+            }
+        } catch {
+            // Table may be empty or newly initialized
+        }
+
+        // Fallback to recorded signals if no standalone candidate rows logged yet
+        if (totalUpCandidates === 0 && totalDownCandidates === 0) {
+            approvedUpSignals = signals.filter(s => s.direction === 'UP').length;
+            approvedDownSignals = signals.filter(s => s.direction === 'DOWN').length;
+            totalUpCandidates = approvedUpSignals;
+            totalDownCandidates = approvedDownSignals;
+        }
+
+        const upApprovalRate = totalUpCandidates > 0 ? Number(((approvedUpSignals / totalUpCandidates) * 100).toFixed(1)) : null;
+        const downApprovalRate = totalDownCandidates > 0 ? Number(((approvedDownSignals / totalDownCandidates) * 100).toFixed(1)) : null;
+
         return {
             totalSignals,
             verifiedWins,
@@ -465,6 +560,23 @@ class PerformanceDB {
             winRate,
             upAccuracy,
             downAccuracy,
+            directional: {
+                totalUpCandidates,
+                totalDownCandidates,
+                approvedUpSignals,
+                approvedDownSignals,
+                rejectedUpCandidates,
+                rejectedDownCandidates,
+                upApprovalRate,
+                downApprovalRate,
+                upWins,
+                upLosses,
+                upAccuracy,
+                downWins,
+                downLosses,
+                downAccuracy,
+                rejectionBreakdown
+            },
             userTrades: {
                 total: userTrades,
                 wins: userTradeWins,

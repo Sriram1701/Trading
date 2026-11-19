@@ -138,6 +138,17 @@ function createServer(visionService = createVisionService(), performanceDB = nul
             return;
         }
 
+        if (requestUrl.pathname === '/api/candidate-audit' && req.method === 'POST') {
+            try {
+                const body = await readJsonBody(req);
+                db.recordCandidate(body);
+                sendJson(res, 200, { success: true });
+            } catch (err) {
+                sendJson(res, 400, { error: err.message });
+            }
+            return;
+        }
+
         if ((requestUrl.pathname === '/api/analyze-frame' || requestUrl.pathname === '/api/analyze-screenshot') && req.method === 'POST') {
             if (isAnalyzingOllama) {
                 sendJson(res, 429, {

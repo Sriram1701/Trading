@@ -145,14 +145,27 @@
                 supportResistance: evaluated.bollinger === 'LOWER_BAND_TEST' ? 'Testing support (Visual Estimate)' : evaluated.bollinger === 'UPPER_BAND_TEST' ? 'Testing resistance (Visual Estimate)' : 'Within range (Visual Estimate)'
             };
 
+            // Determine final Signal Strength and 3-Tier Quality Level
+            let signalStrength = 'WAIT';
+            let qualityLevel = 'WAIT';
+            if (direction === 'UP' || direction === 'DOWN') {
+                signalStrength = (localResult && localResult.signal_strength) || (confidence === 'HIGH' ? 'STRONG' : 'MODERATE');
+                qualityLevel = `${signalStrength} ${direction}`;
+            }
+
             // Comprehensive Signal Audit Log Record (No fabricated OHLC or indicator numbers)
             const audit = {
                 timestamp: new Date(now).toISOString(),
                 signal: direction,
+                signalStrength,
+                qualityLevel,
+                candidateDirection: (localResult && localResult.candidate) || 'WAIT',
+                approved: direction === 'UP' || direction === 'DOWN',
                 candleIdentity: (localResult && localResult.candleId) || 'candle-current',
                 candleCompletionStatus: Boolean(localResult && localResult.candleCompleted),
                 dataQuality: (localResult && localResult.dataQuality) || 'VISUAL_ESTIMATE',
                 priceActionEvidence: (localResult && localResult.priceActionEvidence) || [],
+                trendEvidence: (localResult && localResult.trendEvidence) || [],
                 momentumEvidence: (localResult && localResult.momentumEvidence) || [],
                 volatilityEvidence: (localResult && localResult.volatilityEvidence) || [],
                 conflictingEvidence: (localResult && localResult.conflictingEvidence) || [],
@@ -165,6 +178,8 @@
             return {
                 id: `signal-${now}`,
                 direction,
+                signal_strength: signalStrength,
+                quality_level: qualityLevel,
                 explanation,
                 observations,
                 uncertainties,

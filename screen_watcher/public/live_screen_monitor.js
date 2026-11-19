@@ -59,6 +59,14 @@
         let lastAnalysisCompleteAt = null;
         let lastInferenceLatencyMs = null;
         const signalAuditLog = [];
+        const directionalStats = {
+            totalUpCandidates: 0,
+            totalDownCandidates: 0,
+            approvedUpSignals: 0,
+            approvedDownSignals: 0,
+            rejectedUpCandidates: 0,
+            rejectedDownCandidates: 0
+        };
         const MAX_STALENESS_MS = 30000; // 30s threshold: candles move faster than stale visual results
 
         function setAiStatus(statusText) {
@@ -206,6 +214,39 @@
             if (elements.signalDirection) {
                 elements.signalDirection.textContent = direction;
                 elements.signalDirection.dataset.direction = direction;
+                if (analysis.signal_strength) {
+                    elements.signalDirection.dataset.strength = analysis.signal_strength;
+                }
+            }
+            if (elements.signalStrengthBadge) {
+                const strength = analysis.signal_strength || (direction === 'WAIT' ? 'WAIT' : 'MODERATE');
+                elements.signalStrengthBadge.textContent = strength;
+                elements.signalStrengthBadge.dataset.strength = strength;
+                elements.signalStrengthBadge.className = `signal-strength-badge ${strength.toLowerCase()}`;
+            }
+            if (elements.trendDirectionBadge) {
+                const tr = (analysis.observations && analysis.observations.trend) || 'Neutral';
+                elements.trendDirectionBadge.textContent = `Trend: ${tr.split('(')[0].trim()}`;
+            }
+            if (elements.momentumDirectionBadge) {
+                const mom = (analysis.observations && analysis.observations.rsi14) || 'Neutral';
+                elements.momentumDirectionBadge.textContent = `Momentum: ${mom.split('(')[0].trim()}`;
+            }
+            if (elements.volatilityDirectionBadge) {
+                const vol = (analysis.observations && analysis.observations.bollingerBands) || 'Neutral';
+                elements.volatilityDirectionBadge.textContent = `Volatility: ${vol.split('(')[0].trim()}`;
+            }
+            if (elements.upCandidatesCount) {
+                elements.upCandidatesCount.textContent = directionalStats.totalUpCandidates;
+            }
+            if (elements.downCandidatesCount) {
+                elements.downCandidatesCount.textContent = directionalStats.totalDownCandidates;
+            }
+            if (elements.upApprovedCount) {
+                elements.upApprovedCount.textContent = directionalStats.approvedUpSignals;
+            }
+            if (elements.downApprovedCount) {
+                elements.downApprovedCount.textContent = directionalStats.approvedDownSignals;
             }
             if (elements.signalStatus) {
                 elements.signalStatus.textContent = analysis.explanation || 'Signal evaluated.';
@@ -451,6 +492,13 @@
 
                     latestLocalResult = localResult;
 
+                    // Track directional candidates
+                    if (localResult && localResult.candidate === 'UP') {
+                        directionalStats.totalUpCandidates += 1;
+                    } else if (localResult && localResult.candidate === 'DOWN') {
+                        directionalStats.totalDownCandidates += 1;
+                    }
+
                     const startValidator = now();
                     const telemetry = {
                         captureLatencyMs,
@@ -470,6 +518,35 @@
                     const validatorDone = now();
                     const validationLatencyMs = Math.max(0, validatorDone - startValidator);
                     const totalLocalMs = captureLatencyMs + extractionLatencyMs + engineLatencyMs + validationLatencyMs;
+
+                    // Track directional approvals and rejections
+                    if (finalAnalysis.direction === 'UP') {
+                        directionalStats.approvedUpSignals += 1;
+                    } else if (localResult && localResult.candidate === 'UP') {
+                        directionalStats.rejectedUpCandidates += 1;
+                    }
+
+                    if (finalAnalysis.direction === 'DOWN') {
+                        directionalStats.approvedDownSignals += 1;
+                    } else if (localResult && localResult.candidate === 'DOWN') {
+                        directionalStats.rejectedDownCandidates += 1;
+                    }
+
+                    // Background audit candidate logging
+                    if (typeof fetchImpl === 'function' && localResult && localResult.candidate && localResult.candidate !== 'WAIT') {
+                        void fetchImpl('/api/candidate-audit', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                candidate: localResult.candidate,
+                                approved: finalAnalysis.direction === localResult.candidate,
+                                signalStrength: finalAnalysis.signal_strength || 'WAIT',
+                                rejectionReason: finalAnalysis.direction !== localResult.candidate ? finalAnalysis.explanation : null,
+                                candleId: localResult.candleId || null,
+                                timestamp: new Date(sampleTime).toISOString()
+                            })
+                        }).catch(() => {});
+                    }
 
                     if (elements.analysisStartTime) {
                         elements.analysisStartTime.textContent = new Date(startExtract).toLocaleTimeString();
@@ -731,6 +808,7 @@
             sampleFrame,
             checkVisionStatus,
             getAuditLog: () => signalAuditLog.slice(),
+            getDirectionalStats: () => ({ ...directionalStats }),
             getState: () => ({
                 connected: Boolean(videoTrack && videoTrack.readyState === 'live'),
                 monitoring,
@@ -783,7 +861,15 @@
             frameCaptureLatency: byId('frameCaptureLatency'),
             localExtractionLatency: byId('localExtractionLatency'),
             technicalEngineLatency: byId('technicalEngineLatency'),
-            finalValidationLatency: byId('finalValidationLatency')
+            finalValidationLatency: byId('finalValidationLatency'),
+            signalStrengthBadge: byId('signalStrengthBadge'),
+            trendDirectionBadge: byId('trendDirectionBadge'),
+            momentumDirectionBadge: byId('momentumDirectionBadge'),
+            volatilityDirectionBadge: byId('volatilityDirectionBadge'),
+            upCandidatesCount: byId('upCandidatesCount'),
+            downCandidatesCount: byId('downCandidatesCount'),
+            upApprovedCount: byId('upApprovedCount'),
+            downApprovedCount: byId('downApprovedCount')
         };
         if (Object.values(elements).slice(0, 10).some(element => !element) || !video || !preview || !context) return null;
 

@@ -43,7 +43,7 @@ async function playTone(frequency, startAt, duration, waveform) {
     return true;
 }
 
-async function playSignalSound(direction) {
+async function playSignalSound(direction, strength = 'MODERATE') {
     if (!audioToggle || !audioToggle.checked) return false;
     try {
         const context = initializeAudio();
@@ -57,7 +57,11 @@ async function playSignalSound(direction) {
         const now = context.currentTime;
         const first = playTone(isUp ? 660 : 440, now, 0.12, 'sine');
         const second = playTone(isUp ? 880 : 330, now + 0.14, 0.18, 'triangle');
-        const played = await Promise.all([first, second]);
+        const tones = [first, second];
+        if (strength === 'STRONG') {
+            tones.push(playTone(isUp ? 1100 : 220, now + 0.32, 0.22, 'sine'));
+        }
+        const played = await Promise.all(tones);
         setSoundStatus('On');
         return played.every(Boolean);
     } catch (error) {
@@ -105,14 +109,17 @@ if (desktopNotificationToggle) {
 
 const voiceToggle = byId('voiceAlertsToggle');
 
-function speakSignal(direction) {
+function speakSignal(direction, strength = 'MODERATE') {
     if (!voiceToggle || !voiceToggle.checked) return false;
     if (typeof window === 'undefined' || !window.speechSynthesis) return false;
     if (direction !== 'UP' && direction !== 'DOWN') return false;
 
     try {
         window.speechSynthesis.cancel();
-        const phrase = direction === 'UP' ? 'UP SIGNAL' : 'DOWN SIGNAL';
+        let phrase = direction === 'UP' ? 'UP SIGNAL' : 'DOWN SIGNAL';
+        if (strength === 'STRONG') {
+            phrase = `STRONG ${direction} SIGNAL`;
+        }
         const utterance = new SpeechSynthesisUtterance(phrase);
         utterance.lang = 'en-US';
         utterance.rate = 1.0;
@@ -354,14 +361,14 @@ if (window.SignalNotifications) {
                 }
             }
         },
-        playSound: (direction, id) => {
+        playSound: (direction, id, strength) => {
             if (typeof window.playSignalSound === 'function') {
-                window.playSignalSound(direction, id);
+                window.playSignalSound(direction, strength);
             }
         },
-        speakSignal: direction => {
+        speakSignal: (direction, strength) => {
             if (typeof window.speakSignal === 'function') {
-                window.speakSignal(direction);
+                window.speakSignal(direction, strength);
             }
         }
     });
@@ -418,6 +425,26 @@ function renderPerformanceDashboard(data) {
     }
     if (userTradesSub) {
         userTradesSub.textContent = `${(data.userTrades && data.userTrades.total) || 0} Taken (${(data.userTrades && data.userTrades.wins) || 0}W / ${(data.userTrades && data.userTrades.losses) || 0}L)`;
+    }
+
+    if (data.directional) {
+        const upCandidates = byId('upCandidatesCount');
+        const downCandidates = byId('downCandidatesCount');
+        const upApproved = byId('upApprovedCount');
+        const downApproved = byId('downApprovedCount');
+        const upApprovalSub = byId('upApprovalRateSub');
+        const downApprovalSub = byId('downApprovalRateSub');
+
+        if (upCandidates) upCandidates.textContent = data.directional.totalUpCandidates;
+        if (downCandidates) downCandidates.textContent = data.directional.totalDownCandidates;
+        if (upApproved) upApproved.textContent = data.directional.approvedUpSignals;
+        if (downApproved) downApproved.textContent = data.directional.approvedDownSignals;
+        if (upApprovalSub) {
+            upApprovalSub.textContent = data.directional.upApprovalRate !== null ? `${data.directional.upApprovalRate}% Approved` : '0% Approved';
+        }
+        if (downApprovalSub) {
+            downApprovalSub.textContent = data.directional.downApprovalRate !== null ? `${data.directional.downApprovalRate}% Approved` : '0% Approved';
+        }
     }
 
     // 2. Asset Performance Table

@@ -120,6 +120,7 @@
             }
 
             // Sub-panel scan for RSI / Oscillator curve (bottom 20%)
+            // Filter out static toolbar/time axis rows by requiring horizontal variance & valid curve points
             for (let x = chartStartX; x < chartEndX; x += 2) {
                 let foundY = -1;
                 for (let y = subPanelStartY; y < subPanelEndY; y += 1) {
@@ -137,6 +138,20 @@
                 if (foundY !== -1) {
                     subPanelCurveY.push({ x, y: foundY });
                 }
+            }
+
+            // GHOST RSI REJECTION: Verify sub-panel curve has true dynamic vertical variation
+            // Static time axis markings or bottom toolbar borders sit horizontally at nearly the same Y
+            if (subPanelCurveY.length >= 8) {
+                const subYs = subPanelCurveY.map(pt => pt.y);
+                const minSubY = Math.min(...subYs);
+                const maxSubY = Math.max(...subYs);
+                // If vertical range is less than 3px or if all points are glued to the top edge, it's not a real oscillator
+                if (maxSubY - minSubY < 3 || minSubY <= subPanelStartY + 2) {
+                    subPanelCurveY.length = 0; // Invalidate false sub-panel curve
+                }
+            } else {
+                subPanelCurveY.length = 0;
             }
 
             const totalCandlePixels = greenPixels + redPixels;
@@ -212,6 +227,20 @@
                     pattern = 'HAMMER';
                 } else if (upperWick >= bodyHeight * 1.8 && lowerWick <= Math.max(2, bodyHeight * 0.6)) {
                     pattern = 'SHOOTING_STAR';
+                } else if (candles.length > 0) {
+                    const prev = candles[candles.length - 1];
+                    if (prev.body) {
+                        const isPrevBearish = prev.polarity === 'BEARISH';
+                        const isPrevBullish = prev.polarity === 'BULLISH';
+                        const isCurrBullish = c.polarity === 'BULLISH';
+                        const isCurrBearish = c.polarity === 'BEARISH';
+
+                        if (isPrevBearish && isCurrBullish && bodyTop <= prev.body.top && bodyBottom >= prev.body.bottom && bodyHeight > prev.body.height) {
+                            pattern = 'BULLISH_ENGULFING';
+                        } else if (isPrevBullish && isCurrBearish && bodyTop <= prev.body.top && bodyBottom >= prev.body.bottom && bodyHeight > prev.body.height) {
+                            pattern = 'BEARISH_ENGULFING';
+                        }
+                    }
                 }
 
                 c.body = { top: bodyTop, bottom: bodyBottom, height: bodyHeight };
@@ -374,7 +403,7 @@
             previousRightmostX = rightmostCandle.centerX;
 
             // Indicator Visual Slope & Position Estimation
-            // 1. Moving Averages / Trend
+            // 1. Moving Averages, Sequence & Price Structure Progression
             let visualTrend = 'NEUTRAL';
             let consecutiveBullish = 0;
             let consecutiveBearish = 0;
@@ -385,24 +414,74 @@
             if (consecutiveBullish >= 3) visualTrend = 'BULLISH';
             else if (consecutiveBearish >= 3) visualTrend = 'BEARISH';
 
+            // Price Structure: Higher Highs & Higher Lows vs Lower Highs & Lower Lows
+            let priceStructure = 'SIDEWAYS';
+            if (candles.length >= 3) {
+                let higherHighs = true;
+                let higherLows = true;
+                let lowerHighs = true;
+                let lowerLows = true;
+                const sample = candles.slice(-4);
+                for (let i = 0; i < sample.length - 1; i += 1) {
+                    const c1 = sample[i];
+                    const c2 = sample[i + 1];
+                    // In canvas coords, lower Y is higher price
+                    if (c2.minY > c1.minY) higherHighs = false;
+                    if (c2.maxY > c1.maxY) higherLows = false;
+                    if (c2.minY < c1.minY) lowerHighs = false;
+                    if (c2.maxY < c1.maxY) lowerLows = false;
+                }
+                if (higherHighs && higherLows) priceStructure = 'HIGHER_HIGHS_HIGHER_LOWS';
+                else if (lowerHighs && lowerLows) priceStructure = 'LOWER_HIGHS_LOWER_LOWS';
+            }
+
+            // Moving Average Slope (Fast MA vs Slow MA of candle midpoints)
+            let movingAverage = 'FLAT';
+            if (candles.length >= 3) {
+                const recentForMa = candles.slice(-5);
+                const fastMa = (recentForMa.slice(-2).reduce((acc, c) => acc + (c.minY + c.maxY) / 2, 0)) / 2;
+                const slowMa = (recentForMa.reduce((acc, c) => acc + (c.minY + c.maxY) / 2, 0)) / recentForMa.length;
+                if (fastMa < slowMa - 2) movingAverage = 'BULLISH'; // lower canvas Y = higher price
+                else if (fastMa > slowMa + 2) movingAverage = 'BEARISH';
+            }
+
             // Price position relative to chart height (normalized 0.0 bottom to 1.0 top)
             const chartHeightSpan = chartEndY - chartStartY;
             const evalCandle = lastClosedCandle || currentPenultimate;
             const lastPriceNorm = (chartEndY - ((evalCandle.minY + evalCandle.maxY) / 2)) / chartHeightSpan;
 
-            // 2. Bollinger Band Visual Position
+            // 2. Dynamic Bollinger Band Visual Position
+            // Symmetrically distinguishes between Trend Continuation (Band Walk) and Mean Reversion (Band Rejection)
             let bollingerPosition = 'MIDDLE';
-            if (lastPriceNorm >= 0.80) {
-                bollingerPosition = 'UPPER_BAND_TEST'; // Overbought / upper rejection zone
-            } else if (lastPriceNorm <= 0.20) {
-                bollingerPosition = 'LOWER_BAND_TEST'; // Oversold / lower support zone
+            const evalBodyHeight = (evalCandle.body && evalCandle.body.height) || 5;
+            const evalUpperWick = (evalCandle.wicks && evalCandle.wicks.upper) || 0;
+            const evalLowerWick = (evalCandle.wicks && evalCandle.wicks.lower) || 0;
+
+            if (lastPriceNorm >= 0.78) {
+                // High band zone
+                if (evalCandle.polarity === 'BULLISH' && evalUpperWick <= evalBodyHeight * 0.7) {
+                    bollingerPosition = 'UPPER_BAND_WALK'; // Bullish trend breakout / expansion
+                } else if (evalCandle.polarity === 'BEARISH' || evalCandle.pattern === 'SHOOTING_STAR' || evalUpperWick >= evalBodyHeight * 1.2) {
+                    bollingerPosition = 'UPPER_BAND_REJECTION'; // Bearish rejection / resistance pullback
+                } else {
+                    bollingerPosition = 'UPPER_BAND_TEST'; // General upper band boundary
+                }
+            } else if (lastPriceNorm <= 0.22) {
+                // Low band zone
+                if (evalCandle.polarity === 'BEARISH' && evalLowerWick <= evalBodyHeight * 0.7) {
+                    bollingerPosition = 'LOWER_BAND_WALK'; // Bearish trend breakdown / expansion
+                } else if (evalCandle.polarity === 'BULLISH' || evalCandle.pattern === 'HAMMER' || evalLowerWick >= evalBodyHeight * 1.2) {
+                    bollingerPosition = 'LOWER_BAND_BOUNCE'; // Bullish bounce / support mean reversion
+                } else {
+                    bollingerPosition = 'LOWER_BAND_TEST'; // General lower band boundary
+                }
             }
 
             // 3. Sub-panel RSI / Oscillator Visual Zone
             let rsiVisualZone = 'NEUTRAL';
             let rsiSlope = 'FLAT';
-            if (subPanelCurveY.length >= 4) {
-                const recentSub = subPanelCurveY.slice(-6);
+            if (subPanelCurveY.length >= 6) {
+                const recentSub = subPanelCurveY.slice(-8);
                 const subPanelSpan = subPanelEndY - subPanelStartY;
                 const avgSubY = recentSub.reduce((acc, pt) => acc + pt.y, 0) / recentSub.length;
                 // Higher Y in pixel coords means lower value on the indicator oscillator
@@ -458,6 +537,8 @@
                 },
                 candleCompleted,
                 visualTrend,
+                priceStructure,
+                movingAverage,
                 bollingerPosition,
                 rsiVisualZone,
                 rsiSlope,

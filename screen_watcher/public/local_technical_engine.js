@@ -71,12 +71,15 @@
                 };
             }
 
-            // Independent Evidence Categories:
-            // A. PRICE_ACTION: Completed candle polarity and patterns
-            // B. MOMENTUM: RSI 14 rebound / rejection
-            // C. VOLATILITY: Bollinger Band bounce / rejection
+            // Independent Evidence Categories (Symmetrically Balanced):
+            // A. PRICE_ACTION: Completed candle polarity and candlestick patterns
+            // B. TREND: Moving average slope, higher-highs/lower-lows, and candle sequence
+            // C. MOMENTUM: RSI 14 rebound / rejection / directional expansion
+            // D. VOLATILITY: Bollinger Band bounce / rejection / band walk expansion
             const priceActionUp = [];
             const priceActionDown = [];
+            const trendUp = [];
+            const trendDown = [];
             const momentumUp = [];
             const momentumDown = [];
             const volatilityUp = [];
@@ -85,9 +88,9 @@
 
             const indicators = {
                 priceAction: 'NEUTRAL',
+                trend: 'NEUTRAL',
                 momentum: 'NEUTRAL',
                 volatility: 'NEUTRAL',
-                trend: 'NEUTRAL',
                 ema: 'NEUTRAL',
                 bollinger: 'NEUTRAL',
                 rsi: 'NEUTRAL',
@@ -108,61 +111,133 @@
                     indicators.priceAction = 'BEARISH';
                     priceActionDown.push('Completed candle closed bearish (red).');
                 }
+
+                // Candlestick pattern recognition
+                if (lastCandle.pattern === 'HAMMER') {
+                    indicators.candles = 'BULLISH';
+                    indicators.priceAction = 'BULLISH';
+                    priceActionUp.push('Bullish Hammer pin-bar formed with strong lower wick rejection.');
+                } else if (lastCandle.pattern === 'BULLISH_ENGULFING') {
+                    indicators.candles = 'BULLISH';
+                    indicators.priceAction = 'BULLISH';
+                    priceActionUp.push('Bullish Engulfing pattern formed; buyers overwhelmed previous sellers.');
+                } else if (lastCandle.pattern === 'SHOOTING_STAR') {
+                    indicators.candles = 'BEARISH';
+                    indicators.priceAction = 'BEARISH';
+                    priceActionDown.push('Bearish Shooting Star formed with strong upper wick rejection.');
+                } else if (lastCandle.pattern === 'BEARISH_ENGULFING') {
+                    indicators.candles = 'BEARISH';
+                    indicators.priceAction = 'BEARISH';
+                    priceActionDown.push('Bearish Engulfing pattern formed; sellers overwhelmed previous buyers.');
+                } else if (lastCandle.pattern === 'DOJI') {
+                    conflicting.push('Indecision Doji candle detected; market lacks directional conviction.');
+                }
             }
 
-            // Trend context: visualTrend is supplementary candle sequence context, NOT an independent category
-            if (extracted.visualTrend === 'BULLISH') {
-                indicators.trend = 'BULLISH';
-                indicators.ema = 'BULLISH';
-                if (priceActionDown.length > 0) {
-                    conflicting.push('Bearish completed candle opposes prevailing bullish trend.');
-                }
-            } else if (extracted.visualTrend === 'BEARISH') {
-                indicators.trend = 'BEARISH';
-                indicators.ema = 'BEARISH';
-                if (priceActionUp.length > 0) {
-                    conflicting.push('Bullish completed candle opposes prevailing bearish trend.');
-                }
+            // B. VOLATILITY Category (Bollinger Bands)
+            // Symmetrically distinguishes Support Bounce, Resistance Rejection, and Trend Expansion
+            if (extracted.bollingerPosition === 'LOWER_BAND_TEST' || extracted.bollingerPosition === 'LOWER_BAND_BOUNCE') {
+                indicators.bollinger = 'BULLISH';
+                indicators.volatility = 'BULLISH';
+                volatilityUp.push('Price tested lower Bollinger Band support and bounced.');
+            } else if (extracted.bollingerPosition === 'UPPER_BAND_WALK') {
+                indicators.bollinger = 'BULLISH';
+                indicators.volatility = 'BULLISH';
+                volatilityUp.push('Price is riding upper Bollinger Band in strong trend expansion.');
+            } else if (extracted.bollingerPosition === 'UPPER_BAND_TEST' || extracted.bollingerPosition === 'UPPER_BAND_REJECTION') {
+                indicators.bollinger = 'BEARISH';
+                indicators.volatility = 'BEARISH';
+                volatilityDown.push('Price tested upper Bollinger Band resistance and rejected.');
+            } else if (extracted.bollingerPosition === 'LOWER_BAND_WALK') {
+                indicators.bollinger = 'BEARISH';
+                indicators.volatility = 'BEARISH';
+                volatilityDown.push('Price is riding lower Bollinger Band in strong trend expansion.');
             } else {
-                indicators.trend = 'NEUTRAL';
-                indicators.ema = 'NEUTRAL';
+                indicators.bollinger = 'NEUTRAL';
+                indicators.volatility = 'NEUTRAL';
             }
 
-            // B. MOMENTUM Category (RSI 14)
+            // C. MOMENTUM Category (RSI 14)
             // Evaluated ONLY when sub-panel is present and sufficiently readable
             if (extracted.rsiVisualZone === 'OVERSOLD' && extracted.rsiSlope === 'RISING') {
                 indicators.rsi = 'BULLISH';
                 indicators.momentum = 'BULLISH';
                 momentumUp.push('RSI 14 rebounded upward from oversold zone.');
+            } else if (extracted.rsiVisualZone === 'NEUTRAL' && extracted.rsiSlope === 'RISING' &&
+                       (extracted.visualTrend === 'BULLISH' || extracted.priceStructure === 'HIGHER_HIGHS_HIGHER_LOWS' || extracted.bollingerPosition === 'UPPER_BAND_WALK')) {
+                indicators.rsi = 'BULLISH';
+                indicators.momentum = 'BULLISH';
+                momentumUp.push('RSI 14 expanding upward with healthy bullish momentum.');
             } else if (extracted.rsiVisualZone === 'OVERBOUGHT' && extracted.rsiSlope === 'FALLING') {
                 indicators.rsi = 'BEARISH';
                 indicators.momentum = 'BEARISH';
                 momentumDown.push('RSI 14 rejected downward from overbought zone.');
-            } else if (extracted.rsiVisualZone === 'OVERBOUGHT' && priceActionUp.length > 0) {
+            } else if (extracted.rsiVisualZone === 'NEUTRAL' && extracted.rsiSlope === 'FALLING' &&
+                       (extracted.visualTrend === 'BEARISH' || extracted.priceStructure === 'LOWER_HIGHS_LOWER_LOWS' || extracted.bollingerPosition === 'LOWER_BAND_WALK')) {
+                indicators.rsi = 'BEARISH';
+                indicators.momentum = 'BEARISH';
+                momentumDown.push('RSI 14 expanding downward with healthy bearish momentum.');
+            } else if (extracted.rsiVisualZone === 'OVERBOUGHT' && priceActionUp.length > 0 && extracted.bollingerPosition !== 'UPPER_BAND_WALK') {
                 conflicting.push('RSI 14 is overbought; price is at risk of exhaustion.');
-            } else if (extracted.rsiVisualZone === 'OVERSOLD' && priceActionDown.length > 0) {
+            } else if (extracted.rsiVisualZone === 'OVERSOLD' && priceActionDown.length > 0 && extracted.bollingerPosition !== 'LOWER_BAND_WALK') {
                 conflicting.push('RSI 14 is oversold; price is at risk of exhaustion.');
             } else {
                 indicators.rsi = 'NEUTRAL';
                 indicators.momentum = 'NEUTRAL';
             }
 
-            // C. VOLATILITY Category (Bollinger Bands)
-            // Evaluated ONLY when price has tested extreme band envelope support/resistance
-            if (extracted.bollingerPosition === 'LOWER_BAND_TEST') {
-                indicators.bollinger = 'BULLISH';
-                indicators.volatility = 'BULLISH';
-                volatilityUp.push('Price tested lower Bollinger Band support and bounced.');
-            } else if (extracted.bollingerPosition === 'UPPER_BAND_TEST') {
-                indicators.bollinger = 'BEARISH';
-                indicators.volatility = 'BEARISH';
-                volatilityDown.push('Price tested upper Bollinger Band resistance and rejected.');
-            } else {
-                indicators.bollinger = 'NEUTRAL';
-                indicators.volatility = 'NEUTRAL';
+            // D. TREND Category
+            // Combines visualTrend sequence, price structure (HH/HL vs LH/LL), and moving average slope
+            if (extracted.visualTrend === 'BULLISH') {
+                trendUp.push('Candle sequence shows prevailing bullish trend.');
+            }
+            if (extracted.priceStructure === 'HIGHER_HIGHS_HIGHER_LOWS') {
+                trendUp.push('Price structure forming consistent higher highs and higher lows.');
+            }
+            if (extracted.movingAverage === 'BULLISH') {
+                trendUp.push('Short-term moving average is rising above slow baseline.');
             }
 
-            // Detect conflicts between independent categories
+            if (extracted.visualTrend === 'BEARISH') {
+                trendDown.push('Candle sequence shows prevailing bearish trend.');
+            }
+            if (extracted.priceStructure === 'LOWER_HIGHS_LOWER_LOWS') {
+                trendDown.push('Price structure forming consistent lower highs and lower lows.');
+            }
+            if (extracted.movingAverage === 'BEARISH') {
+                trendDown.push('Short-term moving average is declining below slow baseline.');
+            }
+
+            if (trendUp.length > 0 && trendDown.length === 0) {
+                indicators.trend = 'BULLISH';
+                indicators.ema = 'BULLISH';
+            } else if (trendDown.length > 0 && trendUp.length === 0) {
+                indicators.trend = 'BEARISH';
+                indicators.ema = 'BEARISH';
+            } else {
+                indicators.trend = 'NEUTRAL';
+                indicators.ema = 'NEUTRAL';
+            }
+
+            // Reversal Trap vs Counter-Trend Conflict Resolution:
+            // If price action opposes prior trend, allow validated support bounces / resistance rejections,
+            // but flag unconfirmed counter-trend moves as conflicting.
+            if (trendDown.length > 0 && priceActionUp.length > 0) {
+                if (volatilityUp.length > 0 || momentumUp.length > 0) {
+                    trendUp.push('Bullish reversal reaction off key support level against prior bearish trend.');
+                } else {
+                    conflicting.push('Bullish completed candle opposes prevailing bearish trend.');
+                }
+            }
+            if (trendUp.length > 0 && priceActionDown.length > 0) {
+                if (volatilityDown.length > 0 || momentumDown.length > 0) {
+                    trendDown.push('Bearish rejection reaction off key resistance level against prior bullish trend.');
+                } else {
+                    conflicting.push('Bearish completed candle opposes prevailing bullish trend.');
+                }
+            }
+
+            // Detect cross-category conflicts between independent factors
             if (priceActionUp.length > 0) {
                 if (momentumDown.length > 0) conflicting.push('Bullish price action conflicts with falling bearish momentum.');
                 if (volatilityDown.length > 0) conflicting.push('Bullish price action conflicts with upper Bollinger Band resistance.');
@@ -172,13 +247,14 @@
                 if (volatilityUp.length > 0) conflicting.push('Bearish price action conflicts with lower Bollinger Band support.');
             }
 
-            // Strict Confluence Evaluation:
+            // Strict Confluence & Directional Balance Evaluation:
             // 1. Requires PRICE_ACTION (completed candle)
             // 2. PLUS at least one independent MOMENTUM or VOLATILITY confirmation
             // 3. Candle sequence alone (visualTrend) must NEVER count as independent confirmation
             // 4. Zero conflicting evidence
             // 5. Candle completed confirmation required
             let candidate = 'WAIT';
+            let signalStrength = 'NONE';
             let confidenceTier = 'NONE';
             let waitReason = null;
             const supportingEvidence = [];
@@ -190,51 +266,78 @@
                 if (conflicting.length > 0) {
                     candidate = 'WAIT';
                     confidenceTier = 'NONE';
+                    signalStrength = 'WAIT';
                     waitReason = `Conflicting technical factors detected: ${conflicting.join(' ')}`;
                 } else if (independentUp.length === 0) {
                     candidate = 'WAIT';
                     confidenceTier = 'NONE';
+                    signalStrength = 'WAIT';
                     waitReason = 'Price action shows bullish candle, but independent momentum (RSI) or volatility (Bollinger) confirmation is missing.';
                 } else if (!candleCompleted) {
                     candidate = 'WAIT';
                     confidenceTier = 'LOW';
+                    signalStrength = 'WAIT';
                     waitReason = 'Bullish confluence identified, but awaiting confirmed candle close.';
                 } else {
                     candidate = 'UP';
                     supportingEvidence.push(...priceActionUp, ...independentUp);
-                    confidenceTier = independentUp.length >= 2 ? 'HIGH' : 'MEDIUM';
+                    if (trendUp.length > 0) {
+                        supportingEvidence.push(...trendUp);
+                    }
+                    if (independentUp.length >= 2) {
+                        signalStrength = 'STRONG';
+                        confidenceTier = 'HIGH';
+                    } else {
+                        signalStrength = 'MODERATE';
+                        confidenceTier = 'MEDIUM';
+                    }
                 }
             } else if (priceActionDown.length > 0 && priceActionUp.length === 0) {
                 if (conflicting.length > 0) {
                     candidate = 'WAIT';
                     confidenceTier = 'NONE';
+                    signalStrength = 'WAIT';
                     waitReason = `Conflicting technical factors detected: ${conflicting.join(' ')}`;
                 } else if (independentDown.length === 0) {
                     candidate = 'WAIT';
                     confidenceTier = 'NONE';
+                    signalStrength = 'WAIT';
                     waitReason = 'Price action shows bearish candle, but independent momentum (RSI) or volatility (Bollinger) confirmation is missing.';
                 } else if (!candleCompleted) {
                     candidate = 'WAIT';
                     confidenceTier = 'LOW';
+                    signalStrength = 'WAIT';
                     waitReason = 'Bearish confluence identified, but awaiting confirmed candle close.';
                 } else {
                     candidate = 'DOWN';
                     supportingEvidence.push(...priceActionDown, ...independentDown);
-                    confidenceTier = independentDown.length >= 2 ? 'HIGH' : 'MEDIUM';
+                    if (trendDown.length > 0) {
+                        supportingEvidence.push(...trendDown);
+                    }
+                    if (independentDown.length >= 2) {
+                        signalStrength = 'STRONG';
+                        confidenceTier = 'HIGH';
+                    } else {
+                        signalStrength = 'MODERATE';
+                        confidenceTier = 'MEDIUM';
+                    }
                 }
             } else if (priceActionUp.length > 0 && priceActionDown.length > 0) {
                 candidate = 'WAIT';
                 confidenceTier = 'NONE';
+                signalStrength = 'WAIT';
                 conflicting.push('Conflicting price action: mixed green and red candle signals.');
                 waitReason = 'Conflicting candle signals; market is showing mixed directional cues.';
             } else {
                 candidate = 'WAIT';
                 confidenceTier = 'NONE';
+                signalStrength = 'WAIT';
                 waitReason = 'Insufficient technical confluence; market is consolidating or lacks clear directional price action.';
             }
 
             return {
                 candidate,
+                signal_strength: signalStrength,
                 confidence_tier: confidenceTier,
                 supportingEvidence: (candidate === 'UP' || candidate === 'DOWN') ? supportingEvidence : [],
                 conflictingEvidence: conflicting,
@@ -242,6 +345,7 @@
                 candleCompleted,
                 candleId: (extracted.lastCompletedCandle && extracted.lastCompletedCandle.id) || (extracted.formingCandle && extracted.formingCandle.id) || 'candle-current',
                 priceActionEvidence: priceActionUp.length > 0 ? priceActionUp.slice() : priceActionDown.slice(),
+                trendEvidence: trendUp.length > 0 ? trendUp.slice() : trendDown.slice(),
                 momentumEvidence: momentumUp.length > 0 ? momentumUp.slice() : momentumDown.slice(),
                 volatilityEvidence: volatilityUp.length > 0 ? volatilityUp.slice() : volatilityDown.slice(),
                 waitReason,

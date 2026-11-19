@@ -86,8 +86,8 @@
             lastWaitReason = null;
 
             if (typeof onLiveAnalysis === 'function') onLiveAnalysis(analysis);
-            if (typeof playSound === 'function') playSound(analysis.direction, signalId);
-            if (typeof speakSignal === 'function') speakSignal(analysis.direction);
+            if (typeof playSound === 'function') playSound(analysis.direction, signalId, analysis.signal_strength);
+            if (typeof speakSignal === 'function') speakSignal(analysis.direction, analysis.signal_strength);
             return true;
         }
 
