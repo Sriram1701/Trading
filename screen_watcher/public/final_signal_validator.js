@@ -81,12 +81,17 @@
                 // Directional candidate ('UP' or 'DOWN') from local engine
                 const candidate = localResult.candidate;
 
-                // Guard 3: Completed Candle Requirement
-                if (!localResult.candleCompleted) {
+                // Guard 3: Completed Candle & Conflict Requirement
+                if (!localResult.candleCompleted || localResult.signalStatus === 'WAITING_FOR_CANDLE_CLOSE') {
                     direction = 'WAIT';
                     explanation = `WAIT — Candle forming in ${candidate} direction. Awaiting completed candle close to confirm signal.`;
                     uncertainties.push('Forming candle has not yet closed; premature signals rejected.');
                     confidence = 'LOW';
+                } else if (localResult.conflictingEvidence && localResult.conflictingEvidence.length > 0) {
+                    direction = 'WAIT';
+                    explanation = `WAIT — Conflicting technical factors: ${localResult.conflictingEvidence.join(' ')}`;
+                    uncertainties.push(...localResult.conflictingEvidence);
+                    confidence = 'WAIT';
                 } else {
                     // Local engine confirmed completed candle with >= 2 factors
                     // Guard 4: Secondary Qwen3-VL Vision Verification Inspection
@@ -172,7 +177,15 @@
                 finalValidationReason: explanation,
                 frameFreshness: frameAgeMs <= MAX_STALENESS_MS ? `Fresh (${(frameAgeMs / 1000).toFixed(2)}s)` : `Stale (${(frameAgeMs / 1000).toFixed(2)}s)`,
                 localProcessingLatency: `${((telemetry && telemetry.totalLocalLatencyMs) || 0).toFixed(3)}ms`,
-                visionVerificationStatus: visionResult ? (now - (visionResult.analyzed_at || now) > MAX_STALENESS_MS ? 'UNVERIFIED_EXPIRED' : `VERIFIED_${visionResult.direction}`) : 'UNVERIFIED_PENDING'
+                visionVerificationStatus: visionResult ? (now - (visionResult.analyzed_at || now) > MAX_STALENESS_MS ? 'UNVERIFIED_EXPIRED' : `VERIFIED_${visionResult.direction}`) : 'UNVERIFIED_PENDING',
+                // New timing audit fields
+                signalStatus: localResult ? localResult.signalStatus : 'UNKNOWN',
+                signalGeneratedAt: localResult ? localResult.signalGeneratedAt : null,
+                candleClosedAt: localResult ? localResult.candleClosedAt : null,
+                recommendedEntryBy: localResult ? localResult.recommendedEntryBy : null,
+                entryWindowExpiresAt: localResult ? localResult.entryWindowExpiresAt : null,
+                timeSinceCandleClose: (localResult && localResult.candleClosedAt) ? now - localResult.candleClosedAt : null,
+                timeUntilEntryWindowExpires: (localResult && localResult.entryWindowExpiresAt) ? localResult.entryWindowExpiresAt - now : null
             };
 
             return {
@@ -186,7 +199,13 @@
                 confidence,
                 analyzed_at: now,
                 telemetry,
-                audit
+                audit,
+                // Pass through timing fields for UI
+                signalStatus: localResult ? localResult.signalStatus : 'UNKNOWN',
+                signalGeneratedAt: localResult ? localResult.signalGeneratedAt : null,
+                candleClosedAt: localResult ? localResult.candleClosedAt : null,
+                recommendedEntryBy: localResult ? localResult.recommendedEntryBy : null,
+                entryWindowExpiresAt: localResult ? localResult.entryWindowExpiresAt : null
             };
         }
 

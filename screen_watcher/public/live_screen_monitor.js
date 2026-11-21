@@ -224,6 +224,40 @@
                 elements.signalStrengthBadge.dataset.strength = strength;
                 elements.signalStrengthBadge.className = `signal-strength-badge ${strength.toLowerCase()}`;
             }
+            // Signal Status Badge (NEW: WAITING_FOR_CANDLE_CLOSE, SIGNAL_CONFIRMED, ENTRY_WINDOW_EXPIRED, WAIT — NO SAFE ENTRY)
+            if (elements.signalStatusBadge) {
+                const status = analysis.signalStatus || 'UNKNOWN';
+                elements.signalStatusBadge.textContent = status;
+                elements.signalStatusBadge.dataset.status = status.replace(/\s+/g, '_').toUpperCase();
+                elements.signalStatusBadge.className = `signal-status-badge ${status.includes('WAITING') ? 'waiting' : status.includes('CONFIRMED') ? 'confirmed' : status.includes('EXPIRED') ? 'expired' : 'wait'}`;
+            }
+            // Entry Window Countdown
+            if (elements.entryWindowCountdown) {
+                if (analysis.entryWindowExpiresAt) {
+                    const remainingMs = analysis.entryWindowExpiresAt - sampleTime;
+                    if (remainingMs > 0) {
+                        const remainingSec = Math.ceil(remainingMs / 1000);
+                        elements.entryWindowCountdown.textContent = `Entry window: ${remainingSec}s remaining`;
+                        elements.entryWindowCountdown.dataset.remaining = remainingSec;
+                        elements.entryWindowCountdown.className = remainingSec <= 10 ? 'countdown-critical' : remainingSec <= 30 ? 'countdown-warning' : 'countdown-ok';
+                    } else {
+                        elements.entryWindowCountdown.textContent = 'ENTRY WINDOW EXPIRED';
+                        elements.entryWindowCountdown.className = 'countdown-expired';
+                    }
+                } else {
+                    elements.entryWindowCountdown.textContent = '';
+                    elements.entryWindowCountdown.className = '';
+                }
+            }
+            // Candle Close Timestamp Display
+            if (elements.candleCloseTimestamp) {
+                if (analysis.candleClosedAt) {
+                    const closeTime = new Date(analysis.candleClosedAt);
+                    elements.candleCloseTimestamp.textContent = `Candle closed: ${closeTime.toLocaleTimeString()}.${String(closeTime.getMilliseconds()).padStart(3, '0')}`;
+                } else {
+                    elements.candleCloseTimestamp.textContent = 'Candle close: --';
+                }
+            }
             if (elements.trendDirectionBadge) {
                 const tr = (analysis.observations && analysis.observations.trend) || 'Neutral';
                 elements.trendDirectionBadge.textContent = `Trend: ${tr.split('(')[0].trim()}`;
@@ -869,7 +903,11 @@
             upCandidatesCount: byId('upCandidatesCount'),
             downCandidatesCount: byId('downCandidatesCount'),
             upApprovedCount: byId('upApprovedCount'),
-            downApprovedCount: byId('downApprovedCount')
+            downApprovedCount: byId('downApprovedCount'),
+            // New timing elements
+            signalStatusBadge: byId('signalStatusBadge'),
+            entryWindowCountdown: byId('entryWindowCountdown'),
+            candleCloseTimestamp: byId('candleCloseTimestamp')
         };
         if (Object.values(elements).slice(0, 10).some(element => !element) || !video || !preview || !context) return null;
 

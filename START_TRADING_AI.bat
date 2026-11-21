@@ -2,19 +2,25 @@
 setlocal enabledelayedexpansion
 title Quotex Hybrid AI Live Screen Analyzer - Server Console
 
-:: Automatically change directory to the project root
+:: Automatically change directory to the project root (where this launcher resides)
 cd /d "%~dp0"
+
+:: Robust absolute path to the project root and to server.js
+set "PROJECT_ROOT=%~dp0"
+set "SERVER_PATH=%PROJECT_ROOT%screen_watcher\server.js"
 
 echo ======================================================================
 echo    Quotex Hybrid AI Live Screen Analyzer - One-Click Launcher
 echo ======================================================================
-echo Project Root: %~dp0
+echo Project Root: %PROJECT_ROOT%
+echo Server Path:  %SERVER_PATH%
 echo.
 
-:: 0. Verify screen_watcher\server.js exists in project root
-if not exist "screen_watcher\server.js" (
+:: 0. Verify screen_watcher\server.js exists in project root (absolute path check)
+if not exist "%SERVER_PATH%" (
     echo.
-    echo [ERROR] Expected server file 'screen_watcher\server.js' was not found!
+    echo [ERROR] Expected server file was not found at absolute path:
+    echo    %SERVER_PATH%
     echo Current Directory: %CD%
     echo Please make sure this launcher is placed in the project root: C:\Users\lovel\Desktop\trading
     echo.
@@ -161,14 +167,14 @@ start "Dashboard Opener" /b powershell -NoProfile -ExecutionPolicy Bypass -Comma
 :: 7. Start server in foreground so console remains visible for error diagnosis
 echo.
 echo ======================================================================
-echo Starting server: node screen_watcher/server.js
+echo Starting server: node "%SERVER_PATH%"
 echo Dashboard URL:   http://localhost:3000
 echo Console output will appear below. Keep this window open while trading.
 echo Press Ctrl+C in this window to stop the server at any time.
 echo ======================================================================
 echo.
 
-node screen_watcher/server.js
+node "%SERVER_PATH%"
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Server terminated unexpectedly with exit code %errorlevel%.

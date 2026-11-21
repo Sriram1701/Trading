@@ -87,12 +87,27 @@
 
             const currentNow = typeof now === 'function' ? now() : Date.now();
             const expiryDuration = Number.isInteger(options.expiryDuration) ? options.expiryDuration : 60;
-            const expiryTimestamp = new Date(currentNow + expiryDuration * 1000).toISOString();
+
+            // Use candle close time for expiry alignment (1-minute binary option expiry)
+            // If candleClosedAt is available, expiry is candleClosedAt + 60s
+            // Otherwise fall back to currentNow + 60s (legacy behavior)
+            const candleClosedAt = signal.candleClosedAt || (signal.audit && signal.audit.candleClosedAt) || null;
+            const expiryMs = candleClosedAt ? candleClosedAt + 60000 : currentNow + expiryDuration * 1000;
+            const expiryTimestamp = new Date(expiryMs).toISOString();
 
             const entryPrice = typeof options.entryPrice === 'number' ? options.entryPrice : null;
             const asset = options.asset || 'EUR/USD (Quotex)';
             const marketType = options.marketType || (asset.includes('OTC') ? 'OTC' : 'REGULAR');
             const timeframe = options.timeframe || '1M';
+
+            const candleId = signal.candleId || (signal.audit && signal.audit.candleIdentity) || `candle-${currentNow}`;
+
+            // Deduplication: Check if we already tracked a signal for this candle
+            const existingByCandle = pendingSignals.find(s => s.candleId === candleId);
+            if (existingByCandle) {
+                logger.info(`Duplicate signal for candle ${candleId} ignored (existing: ${existingByCandle.id})`);
+                return existingByCandle;
+            }
 
             const record = {
                 id: signal.id || `SIG-${currentNow}-${Math.random().toString(36).slice(2, 6)}`,
@@ -105,7 +120,15 @@
                 entryPrice,
                 expiryDuration,
                 expiryTimestamp,
-                expiryMs: currentNow + expiryDuration * 1000,
+                expiryMs,
+                candleId,
+                candleClosedAt: candleClosedAt ? new Date(candleClosedAt).toISOString() : null,
+                signalGeneratedAt: signal.signalGeneratedAt ? new Date(signal.signalGeneratedAt).toISOString() : null,
+                signalStatus: signal.signalStatus || 'UNKNOWN',
+                recommendedEntryBy: signal.recommendedEntryBy ? new Date(signal.recommendedEntryBy).toISOString() : null,
+                entryWindowExpiresAt: signal.entryWindowExpiresAt ? new Date(signal.entryWindowExpiresAt).toISOString() : null,
+                timeSinceCandleCloseMs: (candleClosedAt && typeof currentNow === 'number') ? currentNow - candleClosedAt : null,
+                timeUntilEntryWindowExpiresMs: expiryMs - currentNow,
                 candlePattern: (signal.observations && signal.observations.pattern) || 'NORMAL',
                 candlePolarity: (signal.observations && signal.observations.candles) || 'UNKNOWN',
                 technicalEvidence: signal.audit ? [
@@ -117,12 +140,12 @@
                 visionStatus: signal.audit ? signal.audit.visionVerificationStatus : 'UNVERIFIED',
                 confidence: signal.confidence || 'MEDIUM',
                 validationReason: signal.explanation || '',
-                algorithmVersion: 'v1.1.0-hybrid',
+                algorithmVersion: 'v1.2.0-timing-fix',
                 tradePlaced: Boolean(options.tradePlaced),
                 outcome: 'PENDING'
             };
 
-            // Avoid duplicate tracking of the same signal
+            // Avoid duplicate tracking of the same signal (by ID)
             if (!pendingSignals.some(s => s.id === record.id)) {
                 pendingSignals.push(record);
                 savePendingCache();

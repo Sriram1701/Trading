@@ -136,7 +136,11 @@
 
             // B. VOLATILITY Category (Bollinger Bands)
             // Symmetrically distinguishes Support Bounce, Resistance Rejection, and Trend Expansion
-            if (extracted.bollingerPosition === 'LOWER_BAND_TEST' || extracted.bollingerPosition === 'LOWER_BAND_BOUNCE') {
+            // When indicators are unavailable or missing from pixels, never fabricate volatility confirmation
+            if (extracted.bollingerPosition === 'UNAVAILABLE') {
+                indicators.bollinger = 'UNAVAILABLE';
+                indicators.volatility = 'UNAVAILABLE';
+            } else if (extracted.bollingerPosition === 'LOWER_BAND_BOUNCE') {
                 indicators.bollinger = 'BULLISH';
                 indicators.volatility = 'BULLISH';
                 volatilityUp.push('Price tested lower Bollinger Band support and bounced.');
@@ -144,7 +148,7 @@
                 indicators.bollinger = 'BULLISH';
                 indicators.volatility = 'BULLISH';
                 volatilityUp.push('Price is riding upper Bollinger Band in strong trend expansion.');
-            } else if (extracted.bollingerPosition === 'UPPER_BAND_TEST' || extracted.bollingerPosition === 'UPPER_BAND_REJECTION') {
+            } else if (extracted.bollingerPosition === 'UPPER_BAND_REJECTION') {
                 indicators.bollinger = 'BEARISH';
                 indicators.volatility = 'BEARISH';
                 volatilityDown.push('Price tested upper Bollinger Band resistance and rejected.');
@@ -152,6 +156,26 @@
                 indicators.bollinger = 'BEARISH';
                 indicators.volatility = 'BEARISH';
                 volatilityDown.push('Price is riding lower Bollinger Band in strong trend expansion.');
+            } else if (extracted.bollingerPosition === 'UPPER_BAND_TEST') {
+                if (priceActionDown.length > 0) {
+                    indicators.bollinger = 'BEARISH';
+                    indicators.volatility = 'BEARISH';
+                    volatilityDown.push('Price tested upper Bollinger Band resistance and rejected.');
+                } else if (priceActionUp.length > 0) {
+                    indicators.bollinger = 'TESTING_RESISTANCE';
+                    indicators.volatility = 'NEUTRAL';
+                    conflicting.push('Price is testing upper Bollinger Band boundary; risk of resistance rejection.');
+                }
+            } else if (extracted.bollingerPosition === 'LOWER_BAND_TEST') {
+                if (priceActionUp.length > 0) {
+                    indicators.bollinger = 'BULLISH';
+                    indicators.volatility = 'BULLISH';
+                    volatilityUp.push('Price tested lower Bollinger Band support and bounced.');
+                } else if (priceActionDown.length > 0) {
+                    indicators.bollinger = 'TESTING_SUPPORT';
+                    indicators.volatility = 'NEUTRAL';
+                    conflicting.push('Price is testing lower Bollinger Band boundary; risk of support bounce.');
+                }
             } else {
                 indicators.bollinger = 'NEUTRAL';
                 indicators.volatility = 'NEUTRAL';
@@ -350,7 +374,36 @@
                 volatilityEvidence: volatilityUp.length > 0 ? volatilityUp.slice() : volatilityDown.slice(),
                 waitReason,
                 indicatorsEvaluated: indicators,
-                analyzedAt: now
+                analyzedAt: now,
+                signalGeneratedAt: (candidate === 'UP' || candidate === 'DOWN') ? now : null,
+                candleClosedAt: extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt) || null,
+                signalStatus: (() => {
+                    if (candidate === 'WAIT') {
+                        if (!candleCompleted) return 'WAITING_FOR_CANDLE_CLOSE';
+                        if (conflicting.length > 0) return 'WAIT — CONFLICTING EVIDENCE';
+                        if ((candidate === 'UP' && priceActionUp.length > 0) || (candidate === 'DOWN' && priceActionDown.length > 0)) {
+                            if (independentUp.length === 0 && independentDown.length === 0) return 'WAIT — NO INDEPENDENT CONFIRMATION';
+                        }
+                        return 'WAIT — NO SAFE ENTRY';
+                    }
+                    // Candidate is UP or DOWN
+                    if (!candleCompleted) return 'WAITING_FOR_CANDLE_CLOSE';
+                    const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);
+                    if (candleCloseTime) {
+                        const entryWindowExpiresAt = candleCloseTime + 60000; // 1-minute fixed window from candle close
+                        if (now > entryWindowExpiresAt) return 'ENTRY_WINDOW_EXPIRED';
+                        if (now > candleCloseTime + 5000) return 'SIGNAL_CONFIRMED — ENTRY WINDOW CLOSING';
+                    }
+                    return 'SIGNAL_CONFIRMED';
+                })(),
+                recommendedEntryBy: (() => {
+                    const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);
+                    return candleCloseTime ? candleCloseTime + 2000 : null; // Recommend entry within 2s of candle close
+                })(),
+                entryWindowExpiresAt: (() => {
+                    const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);
+                    return candleCloseTime ? candleCloseTime + 60000 : null; // 1-minute expiry aligned to candle close
+                })()
             };
         }
 

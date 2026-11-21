@@ -24,6 +24,7 @@
         let candleSeq = 0;
         let trackedFormingCandle = null;
         let lastClosedCandle = null;
+        let lastCandleCloseTimestamp = null; // Timestamp when last candle actually closed
         let previousCandlesCount = 0;
         let previousPenultimateX = null;
         let previousRightmostX = null;
@@ -32,6 +33,7 @@
             candleSeq = 0;
             trackedFormingCandle = null;
             lastClosedCandle = null;
+            lastCandleCloseTimestamp = null;
             previousCandlesCount = 0;
             previousPenultimateX = null;
             previousRightmostX = null;
@@ -61,66 +63,86 @@
             const data = imageData.data;
 
             // Chart area bounds: strictly isolates the central candlestick chart
-            // Excludes top header/asset bar (y < 7%), left navigation bar (x < 5%),
-            // right trade execution buttons/panel (x > 84%), and bottom oscillator panel (y > 78%)
-            const chartStartX = Math.floor(width * 0.05);
-            const chartEndX = Math.floor(width * 0.84);
-            const chartStartY = Math.floor(height * 0.07);
-            const chartEndY = Math.floor(height * 0.78); // Upper 78% is main chart; bottom 22% is sub-panel (RSI/MACD)
-            const subPanelStartY = Math.floor(height * 0.79);
-            const subPanelEndY = Math.floor(height * 0.96);
+            // Excludes top header/asset bar & promotional banners (y < 24%), left navigation bar (x < 8%),
+            // right trade execution buttons/panel (x > 75%), and bottom oscillator panel (y > 70%)
+            const chartStartX = Math.floor(width * 0.08);
+            const chartEndX = Math.floor(width * 0.75);
+            const chartStartY = Math.floor(height * 0.24);
+            const chartEndY = Math.floor(height * 0.70); // Upper chart area
+            const subPanelStartY = Math.floor(height * 0.71);
+            const subPanelEndY = Math.floor(height * 0.82);
 
             let greenPixels = 0;
             let redPixels = 0;
             let indicatorPixels = 0;
             let subPanelPixels = 0;
 
-            // Scan column by column to detect candle bodies & wicks
-            const columnColorDensity = new Array(width).fill(0);
-            const columnGreenCount = new Array(width).fill(0);
-            const columnRedCount = new Array(width).fill(0);
-            const columnMinY = new Array(width).fill(height);
-            const columnMaxY = new Array(width).fill(-1);
+            const columnHasCandle = new Array(width).fill(false);
+            const columnColor = new Array(width).fill(null);
+            const columnTop = new Array(width).fill(height);
+            const columnBottom = new Array(width).fill(-1);
 
-            // Sub-panel tracking for RSI / MACD
-            const subPanelCurveY = [];
+            const minRun = Math.min(5, Math.max(3, Math.floor(height * 0.015)));
 
-            for (let y = chartStartY; y < chartEndY; y += 1) {
-                for (let x = chartStartX; x < chartEndX; x += 1) {
+            for (let x = chartStartX; x < chartEndX; x += 1) {
+                let maxG = 0, curG = 0;
+                let maxR = 0, curR = 0;
+                let topG = height, botG = -1;
+                let topR = height, botR = -1;
+
+                for (let y = chartStartY; y < chartEndY; y += 1) {
                     const offset = (y * width + x) * 4;
                     const r = data[offset];
                     const g = data[offset + 1];
                     const b = data[offset + 2];
 
-                    // Green candle detection (Quotex bullish candles: bright green / teal)
                     const isGreen = g > 110 && g > r * 1.15 && g > b * 0.85;
-                    // Red candle detection (Quotex bearish candles: bright red / pinkish red)
                     const isRed = r > 110 && r > g * 1.25 && r > b * 1.15;
 
                     if (isGreen) {
                         greenPixels += 1;
-                        columnGreenCount[x] += 1;
-                        columnColorDensity[x] += 1;
-                        columnMinY[x] = Math.min(columnMinY[x], y);
-                        columnMaxY[x] = Math.max(columnMaxY[x], y);
-                    } else if (isRed) {
-                        redPixels += 1;
-                        columnRedCount[x] += 1;
-                        columnColorDensity[x] += 1;
-                        columnMinY[x] = Math.min(columnMinY[x], y);
-                        columnMaxY[x] = Math.max(columnMaxY[x], y);
+                        curG += 1;
+                        if (curG > maxG) maxG = curG;
+                        if (y < topG) topG = y;
+                        if (y > botG) botG = y;
                     } else {
-                        // Indicator line detection: distinct hues such as yellow (r>150, g>150, b<100) or cyan (r<100, g>150, b>150)
+                        curG = 0;
+                    }
+
+                    if (isRed) {
+                        redPixels += 1;
+                        curR += 1;
+                        if (curR > maxR) maxR = curR;
+                        if (y < topR) topR = y;
+                        if (y > botR) botR = y;
+                    } else {
+                        curR = 0;
+                    }
+
+                    if (!isGreen && !isRed) {
                         const isYellowOrCyan = (r > 150 && g > 150 && b < 100) || (r < 100 && g > 150 && b > 150);
                         if (isYellowOrCyan) {
                             indicatorPixels += 1;
                         }
                     }
                 }
+
+                if (maxG >= minRun && maxG >= maxR) {
+                    columnHasCandle[x] = true;
+                    columnColor[x] = 'BULLISH';
+                    columnTop[x] = topG;
+                    columnBottom[x] = botG;
+                } else if (maxR >= minRun && maxR > maxG) {
+                    columnHasCandle[x] = true;
+                    columnColor[x] = 'BEARISH';
+                    columnTop[x] = topR;
+                    columnBottom[x] = botR;
+                }
             }
 
-            // Sub-panel scan for RSI / Oscillator curve (bottom 20%)
+            // Sub-panel scan for RSI / Oscillator curve (bottom ~11%)
             // Filter out static toolbar/time axis rows by requiring horizontal variance & valid curve points
+            const subPanelCurveY = [];
             for (let x = chartStartX; x < chartEndX; x += 2) {
                 let foundY = -1;
                 for (let y = subPanelStartY; y < subPanelEndY; y += 1) {
@@ -168,17 +190,17 @@
             // Cluster contiguous columns into individual candles
             const candles = [];
             let inCandle = false;
-            let currentCandle = null;
-            const maxCandleWidth = Math.max(12, Math.floor(width * 0.08));
+            let cur = null;
+            const maxCandleWidth = Math.max(12, Math.floor(width * 0.06));
 
             function finalizeCandle(c) {
                 if (!c) return;
                 const candleWidth = c.endX - c.startX + 1;
                 const candleHeight = c.maxY - c.minY + 1;
-                // Exclude wide UI elements, horizontal banners, and small noise
-                if (candleWidth > maxCandleWidth || candleHeight < 3) return;
+                // Exclude wide UI elements, horizontal banners, and small 1-2px noise
+                if (candleWidth > maxCandleWidth || candleWidth < 3 || candleHeight < 4) return;
 
-                c.polarity = c.greenCount > c.redCount ? 'BULLISH' : 'BEARISH';
+                c.polarity = c.color;
                 c.width = candleWidth;
                 c.height = candleHeight;
                 c.centerX = Math.round((c.startX + c.endX) / 2);
@@ -251,33 +273,25 @@
             }
 
             for (let x = chartStartX; x < chartEndX; x += 1) {
-                if (columnColorDensity[x] >= 2) {
-                    if (!inCandle) {
-                        inCandle = true;
-                        currentCandle = {
-                            startX: x,
-                            endX: x,
-                            greenCount: columnGreenCount[x],
-                            redCount: columnRedCount[x],
-                            minY: columnMinY[x],
-                            maxY: columnMaxY[x]
-                        };
+                if (columnHasCandle[x]) {
+                    if (!cur) {
+                        cur = { startX: x, endX: x, color: columnColor[x], minY: columnTop[x], maxY: columnBottom[x] };
+                    } else if (cur.color !== columnColor[x]) {
+                        finalizeCandle(cur);
+                        cur = { startX: x, endX: x, color: columnColor[x], minY: columnTop[x], maxY: columnBottom[x] };
                     } else {
-                        currentCandle.endX = x;
-                        currentCandle.greenCount += columnGreenCount[x];
-                        currentCandle.redCount += columnRedCount[x];
-                        currentCandle.minY = Math.min(currentCandle.minY, columnMinY[x]);
-                        currentCandle.maxY = Math.max(currentCandle.maxY, columnMaxY[x]);
+                        cur.endX = x;
+                        cur.minY = Math.min(cur.minY, columnTop[x]);
+                        cur.maxY = Math.max(cur.maxY, columnBottom[x]);
                     }
-                } else if (inCandle) {
-                    inCandle = false;
-                    finalizeCandle(currentCandle);
-                    currentCandle = null;
+                } else if (cur) {
+                    finalizeCandle(cur);
+                    cur = null;
                 }
             }
-            if (currentCandle) {
-                finalizeCandle(currentCandle);
-                currentCandle = null;
+            if (cur) {
+                finalizeCandle(cur);
+                cur = null;
             }
 
             if (candles.length < 2) {
@@ -334,8 +348,24 @@
                 let isNewCandleFormed = false;
 
                 if (candles.length > previousCandlesCount) {
-                    // A new candle column has been added to the right
-                    isNewCandleFormed = true;
+                    // Only accept as a newly formed candle if the rightmost candle is positioned to the right of previous forming candle by >= stride * 0.65
+                    const actualAdvance = rightmostCandle.centerX - trackedFormingCandle.centerX;
+                    if (actualAdvance >= stride * 0.65) {
+                        isNewCandleFormed = true;
+                    } else {
+                        // Same candle: update forming coordinates
+                        trackedFormingCandle.centerX = rightmostCandle.centerX;
+                        trackedFormingCandle.width = rightmostCandle.width;
+                        trackedFormingCandle.height = rightmostCandle.height;
+                        trackedFormingCandle.minY = rightmostCandle.minY;
+                        trackedFormingCandle.maxY = rightmostCandle.maxY;
+                        trackedFormingCandle.polarity = rightmostCandle.polarity;
+                        trackedFormingCandle.body = rightmostCandle.body;
+                        trackedFormingCandle.wicks = rightmostCandle.wicks;
+                        trackedFormingCandle.pattern = rightmostCandle.pattern;
+                        trackedFormingCandle.isCompleted = false;
+                        candleCompleted = false;
+                    }
                 } else if (candles.length === previousCandlesCount) {
                     // Same number of candles: check if chart scrolled or if a new candle formed and one scrolled off left
                     const deltaScroll = previousPenultimateX !== null ? currentPenultimate.centerX - previousPenultimateX : 0;
@@ -395,6 +425,7 @@
                         isCompleted: false
                     };
                     candleCompleted = true;
+                    lastCandleCloseTimestamp = now; // Capture exact close timestamp
                 }
             }
 
@@ -457,12 +488,14 @@
             const evalUpperWick = (evalCandle.wicks && evalCandle.wicks.upper) || 0;
             const evalLowerWick = (evalCandle.wicks && evalCandle.wicks.lower) || 0;
 
-            if (lastPriceNorm >= 0.78) {
+            if (indicatorPixels < 15) {
+                bollingerPosition = 'UNAVAILABLE';
+            } else if (lastPriceNorm >= 0.78) {
                 // High band zone
                 if (evalCandle.polarity === 'BULLISH' && evalUpperWick <= evalBodyHeight * 0.7) {
                     bollingerPosition = 'UPPER_BAND_WALK'; // Bullish trend breakout / expansion
-                } else if (evalCandle.polarity === 'BEARISH' || evalCandle.pattern === 'SHOOTING_STAR' || evalUpperWick >= evalBodyHeight * 1.2) {
-                    bollingerPosition = 'UPPER_BAND_REJECTION'; // Bearish rejection / resistance pullback
+                } else if (evalCandle.polarity === 'BEARISH' && (evalCandle.pattern === 'SHOOTING_STAR' || evalUpperWick >= evalBodyHeight * 0.8)) {
+                    bollingerPosition = 'UPPER_BAND_REJECTION'; // Bearish rejection / resistance pullback requires rejection pattern or upper wick
                 } else {
                     bollingerPosition = 'UPPER_BAND_TEST'; // General upper band boundary
                 }
@@ -470,8 +503,8 @@
                 // Low band zone
                 if (evalCandle.polarity === 'BEARISH' && evalLowerWick <= evalBodyHeight * 0.7) {
                     bollingerPosition = 'LOWER_BAND_WALK'; // Bearish trend breakdown / expansion
-                } else if (evalCandle.polarity === 'BULLISH' || evalCandle.pattern === 'HAMMER' || evalLowerWick >= evalBodyHeight * 1.2) {
-                    bollingerPosition = 'LOWER_BAND_BOUNCE'; // Bullish bounce / support mean reversion
+                } else if (evalCandle.polarity === 'BULLISH' && (evalCandle.pattern === 'HAMMER' || evalLowerWick >= evalBodyHeight * 0.8)) {
+                    bollingerPosition = 'LOWER_BAND_BOUNCE'; // Bullish bounce / support mean reversion requires rejection pattern or lower wick
                 } else {
                     bollingerPosition = 'LOWER_BAND_TEST'; // General lower band boundary
                 }
@@ -504,6 +537,7 @@
                 exactValuesAvailable: false,
                 limitations: 'Exact numerical OHLC, EMA and RSI values are not directly queryable from pixels; extracted features represent geometric and color estimates.',
                 candlesCount: candles.length,
+                candles: candles,
                 formingCandle: {
                     id: trackedFormingCandle.id,
                     polarity: trackedFormingCandle.polarity,
@@ -523,7 +557,8 @@
                     body: lastClosedCandle.body,
                     wicks: lastClosedCandle.wicks,
                     pattern: lastClosedCandle.pattern,
-                    isCompleted: true
+                    isCompleted: true,
+                    candleClosedAt: lastCandleCloseTimestamp
                 } : {
                     id: 'historical_penultimate',
                     polarity: currentPenultimate.polarity,
@@ -533,9 +568,11 @@
                     body: currentPenultimate.body,
                     wicks: currentPenultimate.wicks,
                     pattern: currentPenultimate.pattern,
-                    isCompleted: false
+                    isCompleted: false,
+                    candleClosedAt: null
                 },
                 candleCompleted,
+                candleClosedAt: lastCandleCloseTimestamp,
                 visualTrend,
                 priceStructure,
                 movingAverage,

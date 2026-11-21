@@ -159,12 +159,18 @@
                     <h1 id="signalDirection" class="signal-direction" data-direction="WAIT" aria-live="polite">WAIT</h1>
                     <span id="signalStrengthBadge" class="signal-strength-badge wait" data-strength="WAIT">WAIT</span>
                 </div>
+                <!-- Signal Status & Entry Window (NEW) -->
+                <div class="signal-timing-row">
+                    <span id="signalStatusBadge" class="signal-status-badge unknown" data-status="UNKNOWN" aria-live="polite">UNKNOWN</span>
+                    <span id="entryWindowCountdown" class="entry-window-countdown" aria-live="polite"></span>
+                </div>
                 <div class="signal-sub-badges" id="signalSubBadges">
                     <span id="trendDirectionBadge" class="sub-badge">Trend: --</span>
                     <span id="momentumDirectionBadge" class="sub-badge">Momentum: --</span>
                     <span id="volatilityDirectionBadge" class="sub-badge">Volatility: --</span>
                 </div>
                 <p id="marketDataStatus" class="signal-reason" role="status" aria-live="polite">Waiting for live monitoring to start.</p>
+                <p id="candleCloseTimestamp" class="candle-close-timestamp" aria-live="polite">Candle close: --</p>
                 
                 <!-- Trade Placement Confirmation (Optional User Manual Action) -->
                 <div id="tradeConfirmationBar" class="trade-confirmation-bar" style="display:none;">
