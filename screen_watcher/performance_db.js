@@ -11,6 +11,31 @@ const BACKUP_JSON_PATH = path.join(DATA_DIR, 'trading_analytics_backup.json');
 const VALID_OUTCOMES = new Set(['WIN', 'LOSS', 'DRAW', 'UNVERIFIED', 'PENDING']);
 const VALID_DIRECTIONS = new Set(['UP', 'DOWN', 'WAIT']);
 
+/**
+ * Computes Wilson Score 95% Confidence Interval for a binomial proportion.
+ * Correctly handles small sample sizes and prevents misleading 100% or 0% claims.
+ *
+ * @param {number} wins - Number of successful outcomes
+ * @param {number} total - Total decided sample size
+ * @param {number} [z=1.96] - Z-score (1.96 corresponds to 95% two-sided confidence)
+ * @returns {{ lower: number|null, upper: number|null, margin: number|null }}
+ */
+function computeWilsonScoreCI(wins, total, z = 1.96) {
+    if (!total || total <= 0) return { lower: null, upper: null, margin: null };
+    const p = wins / total;
+    const z2 = z * z;
+    const denominator = 1 + z2 / total;
+    const center = (p + z2 / (2 * total)) / denominator;
+    const spread = (z * Math.sqrt((p * (1 - p)) / total + z2 / (4 * total * total))) / denominator;
+    const lower = Math.max(0, center - spread);
+    const upper = Math.min(1, center + spread);
+    return {
+        lower: Number((lower * 100).toFixed(1)),
+        upper: Number((upper * 100).toFixed(1)),
+        margin: Number((spread * 100).toFixed(1))
+    };
+}
+
 class PerformanceDB {
     constructor(dbPath = DEFAULT_DB_PATH) {
         this.dbPath = dbPath;
@@ -329,6 +354,10 @@ class PerformanceDB {
             breakdown.unconfirmedCandle += 1;
         } else if (lower.includes('exhaustion') || lower.includes('overbought') || lower.includes('oversold')) {
             breakdown.exhaustionRisk += 1;
+        } else if (lower.includes('expired') || lower.includes('entry window')) {
+            breakdown.expiredEntryWindow += 1;
+        } else if (lower.includes('unreadable') || lower.includes('unavailable') || lower.includes('invalid')) {
+            breakdown.dataUnavailable += 1;
         } else {
             breakdown.other += 1;
         }
@@ -504,6 +533,7 @@ class PerformanceDB {
         // Directional Candidate and Verification Analytics
         let totalUpCandidates = 0;
         let totalDownCandidates = 0;
+        let totalWaitDecisions = 0;
         let approvedUpSignals = 0;
         let approvedDownSignals = 0;
         let rejectedUpCandidates = 0;
@@ -513,6 +543,8 @@ class PerformanceDB {
             conflictingIndicators: 0,
             unconfirmedCandle: 0,
             exhaustionRisk: 0,
+            expiredEntryWindow: 0,
+            dataUnavailable: 0,
             other: 0
         };
 
@@ -533,6 +565,9 @@ class PerformanceDB {
                         rejectedDownCandidates += 1;
                         this.categorizeRejection(c.rejection_reason, rejectionBreakdown);
                     }
+                } else {
+                    totalWaitDecisions += 1;
+                    this.categorizeRejection(c.rejection_reason, rejectionBreakdown);
                 }
             }
         } catch {
@@ -550,6 +585,11 @@ class PerformanceDB {
         const upApprovalRate = totalUpCandidates > 0 ? Number(((approvedUpSignals / totalUpCandidates) * 100).toFixed(1)) : null;
         const downApprovalRate = totalDownCandidates > 0 ? Number(((approvedDownSignals / totalDownCandidates) * 100).toFixed(1)) : null;
 
+        const confidenceInterval = computeWilsonScoreCI(verifiedWins, totalDecided);
+        const upConfidenceInterval = computeWilsonScoreCI(upWins, totalUpDecided);
+        const downConfidenceInterval = computeWilsonScoreCI(downWins, totalDownDecided);
+        const validationStatus = totalDecided < minSamplesRequired ? 'INSUFFICIENT_VALIDATION_DATA' : 'VALIDATED_SAMPLE';
+
         return {
             totalSignals,
             verifiedWins,
@@ -557,12 +597,20 @@ class PerformanceDB {
             draws,
             unverified,
             pending,
+            totalDecided,
+            minSamplesRequired,
+            validationStatus,
+            targetAccuracy: '>=90%',
             winRate,
+            confidenceInterval,
             upAccuracy,
+            upConfidenceInterval,
             downAccuracy,
+            downConfidenceInterval,
             directional: {
                 totalUpCandidates,
                 totalDownCandidates,
+                totalWaitDecisions,
                 approvedUpSignals,
                 approvedDownSignals,
                 rejectedUpCandidates,
@@ -572,9 +620,11 @@ class PerformanceDB {
                 upWins,
                 upLosses,
                 upAccuracy,
+                upConfidenceInterval,
                 downWins,
                 downLosses,
                 downAccuracy,
+                downConfidenceInterval,
                 rejectionBreakdown
             },
             userTrades: {
@@ -617,7 +667,13 @@ class PerformanceDB {
     }
 
     syncJsonBackup() {
+        if (this.dbPath === ':memory:') {
+            return;
+        }
         try {
+            if (!fs.existsSync(DATA_DIR)) {
+                fs.mkdirSync(DATA_DIR, { recursive: true });
+            }
             const rows = this.db.prepare('SELECT * FROM signals ORDER BY entry_timestamp DESC').all();
             const versions = this.db.prepare('SELECT * FROM strategy_versions').all();
             const losses = this.db.prepare('SELECT * FROM loss_analysis').all();
@@ -652,5 +708,6 @@ function getPerformanceDB(dbPath) {
 
 module.exports = {
     PerformanceDB,
-    getPerformanceDB
+    getPerformanceDB,
+    computeWilsonScoreCI
 };

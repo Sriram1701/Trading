@@ -224,12 +224,20 @@
                 elements.signalStrengthBadge.dataset.strength = strength;
                 elements.signalStrengthBadge.className = `signal-strength-badge ${strength.toLowerCase()}`;
             }
-            // Signal Status Badge (NEW: WAITING_FOR_CANDLE_CLOSE, SIGNAL_CONFIRMED, ENTRY_WINDOW_EXPIRED, WAIT — NO SAFE ENTRY)
+            // Signal Status Badge (8 Canonical States):
+            // ANALYZING, WAITING FOR CONFIRMATION, WAIT, UP CONFIRMED, DOWN CONFIRMED, ENTRY WINDOW EXPIRED, DATA UNAVAILABLE, WAITING FOR CANDLE CLOSE
             if (elements.signalStatusBadge) {
-                const status = analysis.signalStatus || 'UNKNOWN';
+                const status = analysis.signalState || analysis.signalStatus || 'WAIT';
                 elements.signalStatusBadge.textContent = status;
                 elements.signalStatusBadge.dataset.status = status.replace(/\s+/g, '_').toUpperCase();
-                elements.signalStatusBadge.className = `signal-status-badge ${status.includes('WAITING') ? 'waiting' : status.includes('CONFIRMED') ? 'confirmed' : status.includes('EXPIRED') ? 'expired' : 'wait'}`;
+                elements.signalStatusBadge.className = `signal-status-badge ${
+                    status.includes('WAITING FOR CANDLE CLOSE') || status.includes('WAITING_FOR_CANDLE_CLOSE') ? 'waiting-candle' :
+                    status.includes('CONFIRMATION') ? 'waiting-conf' :
+                    status.includes('CONFIRMED') ? 'confirmed' :
+                    status.includes('EXPIRED') ? 'expired' :
+                    status.includes('UNAVAILABLE') ? 'unavailable' :
+                    status.includes('ANALYZING') ? 'analyzing' : 'wait'
+                }`;
             }
             // Entry Window Countdown
             if (elements.entryWindowCountdown) {
@@ -631,6 +639,17 @@
                         void outcomeTracker.trackSignal(finalAnalysis, {
                             entryPrice: extracted ? extracted.currentPrice : null,
                             expiryDuration: 60
+                        });
+                    }
+
+                    if (outcomeTracker && typeof outcomeTracker.recordCandidateAudit === 'function' && localResult) {
+                        void outcomeTracker.recordCandidateAudit({
+                            candidate: localResult.candidate,
+                            approved: finalAnalysis.direction === 'UP' || finalAnalysis.direction === 'DOWN',
+                            signalStrength: finalAnalysis.signal_strength || 'WAIT',
+                            rejectionReason: finalAnalysis.explanation || localResult.waitReason || null,
+                            candleId: localResult.candleId || null,
+                            timestamp: new Date(sampleTime).toISOString()
                         });
                     }
 

@@ -396,10 +396,21 @@ function renderPerformanceDashboard(data) {
     const userTradesSub = byId('userTradesSub');
 
     if (overallWinRate) {
-        overallWinRate.textContent = data.winRate !== null ? `${data.winRate}%` : '--%';
+        if (data.winRate !== null) {
+            const ciText = (data.confidenceInterval && data.confidenceInterval.lower !== null)
+                ? ` (95% CI: ${data.confidenceInterval.lower}%–${data.confidenceInterval.upper}%)`
+                : '';
+            overallWinRate.textContent = `${data.winRate}%${ciText}`;
+        } else {
+            overallWinRate.textContent = '--%';
+        }
     }
     if (winLossSub) {
-        winLossSub.textContent = `${data.verifiedWins} Wins / ${data.verifiedLosses} Losses (${data.draws} Draws)`;
+        if (data.validationStatus === 'INSUFFICIENT_VALIDATION_DATA') {
+            winLossSub.innerHTML = `<span style="color:#ffa726;font-weight:600;">INSUFFICIENT VALIDATION DATA</span> (${data.totalDecided || 0} / ${data.minSamplesRequired || 20} needed) · ${data.verifiedWins}W / ${data.verifiedLosses}L`;
+        } else {
+            winLossSub.textContent = `${data.verifiedWins} Wins / ${data.verifiedLosses} Losses (${data.draws} Draws) · Validated Sample`;
+        }
     }
     if (totalSignalsCount) {
         totalSignalsCount.textContent = data.totalSignals;
@@ -409,10 +420,24 @@ function renderPerformanceDashboard(data) {
         signalsSub.textContent = `${verifiedTotal} Verified · ${data.unverified} Unverified (${data.pending} Pending)`;
     }
     if (upAccuracyVal) {
-        upAccuracyVal.textContent = data.upAccuracy !== null ? `${data.upAccuracy}%` : '--%';
+        if (data.upAccuracy !== null) {
+            const upCi = (data.upConfidenceInterval && data.upConfidenceInterval.lower !== null)
+                ? ` (CI: ${data.upConfidenceInterval.lower}%–${data.upConfidenceInterval.upper}%)`
+                : '';
+            upAccuracyVal.textContent = `${data.upAccuracy}%${upCi}`;
+        } else {
+            upAccuracyVal.textContent = '--%';
+        }
     }
     if (downAccuracyVal) {
-        downAccuracyVal.textContent = data.downAccuracy !== null ? `${data.downAccuracy}%` : '--%';
+        if (data.downAccuracy !== null) {
+            const downCi = (data.downConfidenceInterval && data.downConfidenceInterval.lower !== null)
+                ? ` (CI: ${data.downConfidenceInterval.lower}%–${data.downConfidenceInterval.upper}%)`
+                : '';
+            downAccuracyVal.textContent = `${data.downAccuracy}%${downCi}`;
+        } else {
+            downAccuracyVal.textContent = '--%';
+        }
     }
     if (rolling10Val) {
         rolling10Val.textContent = data.rolling && data.rolling.last10 !== null ? `${data.rolling.last10}%` : '--%';

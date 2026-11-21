@@ -40,6 +40,8 @@
                     dataQuality: 'INVALID',
                     candleCompleted: false,
                     waitReason: 'Invalid chart frame or unreadable pixels.',
+                    signalState: 'DATA UNAVAILABLE',
+                    signalStatus: 'WAIT — NO SAFE ENTRY',
                     indicatorsEvaluated: {
                         trend: 'UNAVAILABLE',
                         ema: 'UNAVAILABLE',
@@ -60,6 +62,8 @@
                     dataQuality: extracted.dataQuality || 'INSUFFICIENT_DATA',
                     candleCompleted: false,
                     waitReason: extracted.reason || 'Visual candlestick pattern unreadable.',
+                    signalState: 'DATA UNAVAILABLE',
+                    signalStatus: 'WAIT — NO SAFE ENTRY',
                     indicatorsEvaluated: {
                         trend: 'UNREADABLE',
                         ema: 'UNREADABLE',
@@ -247,17 +251,23 @@
             // If price action opposes prior trend, allow validated support bounces / resistance rejections,
             // but flag unconfirmed counter-trend moves as conflicting.
             if (trendDown.length > 0 && priceActionUp.length > 0) {
-                if (volatilityUp.length > 0 || momentumUp.length > 0) {
+                const hasStructuralReversal = (lastCandle && (lastCandle.pattern === 'HAMMER' || lastCandle.pattern === 'BULLISH_ENGULFING')) ||
+                                             extracted.priceStructure === 'HIGHER_HIGHS_HIGHER_LOWS';
+                const hasConfluentIndicators = (volatilityUp.length > 0 && momentumUp.length > 0) || (hasStructuralReversal && (volatilityUp.length > 0 || momentumUp.length > 0));
+                if (hasConfluentIndicators) {
                     trendUp.push('Bullish reversal reaction off key support level against prior bearish trend.');
                 } else {
-                    conflicting.push('Bullish completed candle opposes prevailing bearish trend.');
+                    conflicting.push('Bullish completed candle opposes prevailing bearish trend without confirmed structural reversal pattern.');
                 }
             }
             if (trendUp.length > 0 && priceActionDown.length > 0) {
-                if (volatilityDown.length > 0 || momentumDown.length > 0) {
+                const hasStructuralReversal = (lastCandle && (lastCandle.pattern === 'SHOOTING_STAR' || lastCandle.pattern === 'BEARISH_ENGULFING')) ||
+                                             extracted.priceStructure === 'LOWER_HIGHS_LOWER_LOWS';
+                const hasConfluentIndicators = (volatilityDown.length > 0 && momentumDown.length > 0) || (hasStructuralReversal && (volatilityDown.length > 0 || momentumDown.length > 0));
+                if (hasConfluentIndicators) {
                     trendDown.push('Bearish rejection reaction off key resistance level against prior bullish trend.');
                 } else {
-                    conflicting.push('Bearish completed candle opposes prevailing bullish trend.');
+                    conflicting.push('Bearish completed candle opposes prevailing bullish trend without confirmed structural reversal pattern.');
                 }
             }
 
@@ -381,9 +391,6 @@
                     if (candidate === 'WAIT') {
                         if (!candleCompleted) return 'WAITING_FOR_CANDLE_CLOSE';
                         if (conflicting.length > 0) return 'WAIT — CONFLICTING EVIDENCE';
-                        if ((candidate === 'UP' && priceActionUp.length > 0) || (candidate === 'DOWN' && priceActionDown.length > 0)) {
-                            if (independentUp.length === 0 && independentDown.length === 0) return 'WAIT — NO INDEPENDENT CONFIRMATION';
-                        }
                         return 'WAIT — NO SAFE ENTRY';
                     }
                     // Candidate is UP or DOWN
@@ -395,6 +402,30 @@
                         if (now > candleCloseTime + 5000) return 'SIGNAL_CONFIRMED — ENTRY WINDOW CLOSING';
                     }
                     return 'SIGNAL_CONFIRMED';
+                })(),
+                signalState: (() => {
+                    if (extracted.dataQuality === 'INVALID' || extracted.dataQuality === 'INSUFFICIENT_DATA') {
+                        return 'DATA UNAVAILABLE';
+                    }
+                    if (!candleCompleted) {
+                        return 'WAITING FOR CANDLE CLOSE';
+                    }
+                    if (candidate === 'WAIT') {
+                        if (conflicting.length > 0) {
+                            return 'WAIT';
+                        }
+                        if ((priceActionUp.length > 0 || priceActionDown.length > 0) && independentUp.length === 0 && independentDown.length === 0) {
+                            return 'WAITING FOR CONFIRMATION';
+                        }
+                        return 'WAIT';
+                    }
+                    // Candidate is UP or DOWN
+                    const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);
+                    if (candleCloseTime) {
+                        const entryWindowExpiresAt = candleCloseTime + 60000;
+                        if (now > entryWindowExpiresAt) return 'ENTRY WINDOW EXPIRED';
+                    }
+                    return candidate === 'UP' ? 'UP CONFIRMED' : 'DOWN CONFIRMED';
                 })(),
                 recommendedEntryBy: (() => {
                     const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);

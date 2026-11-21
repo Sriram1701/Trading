@@ -305,6 +305,11 @@
             return res;
         }
 
+        async function recordCandidateAudit(candidateData) {
+            if (!candidateData) return null;
+            return await postJson('/api/candidate-audit', candidateData);
+        }
+
         return {
             trackSignal,
             recordTradeConfirmation,
@@ -312,6 +317,7 @@
             checkPendingExpiries,
             fetchMetrics,
             rollbackStrategy,
+            recordCandidateAudit,
             getPendingSignals: () => pendingSignals.slice(),
             getLatestMetrics: () => latestMetrics
         };
