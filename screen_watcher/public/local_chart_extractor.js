@@ -310,12 +310,7 @@
                 };
             }
 
-            // Identify rightmost forming candle vs completed candles
-            const rightmostCandle = candles[candles.length - 1];
-            const currentPenultimate = candles[candles.length - 2];
-            const recentCandles = candles.slice(-5);
-
-            // 1. Calculate established candle stride (median distance between consecutive historical candles)
+            // Calculate established candle stride (median distance between consecutive historical candles)
             let stride = 16;
             if (candles.length >= 3) {
                 const deltas = [];
@@ -325,8 +320,24 @@
                 deltas.sort((a, b) => a - b);
                 stride = Math.max(6, deltas[Math.floor(deltas.length / 2)] || 16);
             } else {
-                stride = Math.max(6, currentPenultimate.centerX - candles[0].centerX || 16);
+                stride = Math.max(6, candles[1].centerX - candles[0].centerX || 16);
             }
+
+            // Exclude isolated price axis badges (e.g. red/green current price pill on right price axis > 3.5x stride away from actual chart sequence)
+            while (candles.length >= 3) {
+                const last = candles[candles.length - 1];
+                const prev = candles[candles.length - 2];
+                if (last.centerX - prev.centerX > stride * 3.5) {
+                    candles.pop(); // Remove right price-scale tag artifact
+                } else {
+                    break;
+                }
+            }
+
+            // Identify rightmost forming candle vs completed candles
+            const rightmostCandle = candles[candles.length - 1];
+            const currentPenultimate = candles[candles.length - 2];
+            const recentCandles = candles.slice(-5);
 
             // 2. Stable Candle Identity and Completion Tracking (Fix 2)
             // A candle may become completed only when reliable evidence confirms the previous active candle closed.
