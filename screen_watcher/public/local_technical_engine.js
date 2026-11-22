@@ -40,14 +40,11 @@
                     dataQuality: 'INVALID',
                     candleCompleted: false,
                     waitReason: 'Invalid chart frame or unreadable pixels.',
-                    signalState: 'DATA UNAVAILABLE',
-                    signalStatus: 'WAIT — NO SAFE ENTRY',
                     indicatorsEvaluated: {
                         trend: 'UNAVAILABLE',
                         ema: 'UNAVAILABLE',
                         bollinger: 'UNAVAILABLE',
                         rsi: 'UNAVAILABLE',
-                        macd: 'UNAVAILABLE',
                         candles: 'UNAVAILABLE'
                     },
                     analyzedAt: now
@@ -63,14 +60,11 @@
                     dataQuality: extracted.dataQuality || 'INSUFFICIENT_DATA',
                     candleCompleted: false,
                     waitReason: extracted.reason || 'Visual candlestick pattern unreadable.',
-                    signalState: 'DATA UNAVAILABLE',
-                    signalStatus: 'WAIT — NO SAFE ENTRY',
                     indicatorsEvaluated: {
                         trend: 'UNREADABLE',
                         ema: 'UNREADABLE',
                         bollinger: 'UNREADABLE',
                         rsi: 'UNREADABLE',
-                        macd: 'UNAVAILABLE',
                         candles: 'UNREADABLE'
                     },
                     analyzedAt: now
@@ -100,7 +94,6 @@
                 ema: 'NEUTRAL',
                 bollinger: 'NEUTRAL',
                 rsi: 'NEUTRAL',
-                macd: 'UNAVAILABLE',
                 candles: 'NEUTRAL'
             };
 
@@ -143,11 +136,7 @@
 
             // B. VOLATILITY Category (Bollinger Bands)
             // Symmetrically distinguishes Support Bounce, Resistance Rejection, and Trend Expansion
-            // When indicators are unavailable or missing from pixels, never fabricate volatility confirmation
-            if (extracted.bollingerPosition === 'UNAVAILABLE') {
-                indicators.bollinger = 'UNAVAILABLE';
-                indicators.volatility = 'UNAVAILABLE';
-            } else if (extracted.bollingerPosition === 'LOWER_BAND_BOUNCE') {
+            if (extracted.bollingerPosition === 'LOWER_BAND_TEST' || extracted.bollingerPosition === 'LOWER_BAND_BOUNCE') {
                 indicators.bollinger = 'BULLISH';
                 indicators.volatility = 'BULLISH';
                 volatilityUp.push('Price tested lower Bollinger Band support and bounced.');
@@ -155,7 +144,7 @@
                 indicators.bollinger = 'BULLISH';
                 indicators.volatility = 'BULLISH';
                 volatilityUp.push('Price is riding upper Bollinger Band in strong trend expansion.');
-            } else if (extracted.bollingerPosition === 'UPPER_BAND_REJECTION') {
+            } else if (extracted.bollingerPosition === 'UPPER_BAND_TEST' || extracted.bollingerPosition === 'UPPER_BAND_REJECTION') {
                 indicators.bollinger = 'BEARISH';
                 indicators.volatility = 'BEARISH';
                 volatilityDown.push('Price tested upper Bollinger Band resistance and rejected.');
@@ -163,26 +152,6 @@
                 indicators.bollinger = 'BEARISH';
                 indicators.volatility = 'BEARISH';
                 volatilityDown.push('Price is riding lower Bollinger Band in strong trend expansion.');
-            } else if (extracted.bollingerPosition === 'UPPER_BAND_TEST') {
-                if (priceActionDown.length > 0) {
-                    indicators.bollinger = 'BEARISH';
-                    indicators.volatility = 'BEARISH';
-                    volatilityDown.push('Price tested upper Bollinger Band resistance and rejected.');
-                } else if (priceActionUp.length > 0) {
-                    indicators.bollinger = 'TESTING_RESISTANCE';
-                    indicators.volatility = 'NEUTRAL';
-                    conflicting.push('Price is testing upper Bollinger Band boundary; risk of resistance rejection.');
-                }
-            } else if (extracted.bollingerPosition === 'LOWER_BAND_TEST') {
-                if (priceActionUp.length > 0) {
-                    indicators.bollinger = 'BULLISH';
-                    indicators.volatility = 'BULLISH';
-                    volatilityUp.push('Price tested lower Bollinger Band support and bounced.');
-                } else if (priceActionDown.length > 0) {
-                    indicators.bollinger = 'TESTING_SUPPORT';
-                    indicators.volatility = 'NEUTRAL';
-                    conflicting.push('Price is testing lower Bollinger Band boundary; risk of support bounce.');
-                }
             } else {
                 indicators.bollinger = 'NEUTRAL';
                 indicators.volatility = 'NEUTRAL';
@@ -254,23 +223,17 @@
             // If price action opposes prior trend, allow validated support bounces / resistance rejections,
             // but flag unconfirmed counter-trend moves as conflicting.
             if (trendDown.length > 0 && priceActionUp.length > 0) {
-                const hasStructuralReversal = (lastCandle && (lastCandle.pattern === 'HAMMER' || lastCandle.pattern === 'BULLISH_ENGULFING')) ||
-                                             extracted.priceStructure === 'HIGHER_HIGHS_HIGHER_LOWS';
-                const hasConfluentIndicators = (volatilityUp.length > 0 && momentumUp.length > 0) || (hasStructuralReversal && (volatilityUp.length > 0 || momentumUp.length > 0));
-                if (hasConfluentIndicators) {
+                if (volatilityUp.length > 0 || momentumUp.length > 0) {
                     trendUp.push('Bullish reversal reaction off key support level against prior bearish trend.');
                 } else {
-                    conflicting.push('Bullish completed candle opposes prevailing bearish trend without confirmed structural reversal pattern.');
+                    conflicting.push('Bullish completed candle opposes prevailing bearish trend.');
                 }
             }
             if (trendUp.length > 0 && priceActionDown.length > 0) {
-                const hasStructuralReversal = (lastCandle && (lastCandle.pattern === 'SHOOTING_STAR' || lastCandle.pattern === 'BEARISH_ENGULFING')) ||
-                                             extracted.priceStructure === 'LOWER_HIGHS_LOWER_LOWS';
-                const hasConfluentIndicators = (volatilityDown.length > 0 && momentumDown.length > 0) || (hasStructuralReversal && (volatilityDown.length > 0 || momentumDown.length > 0));
-                if (hasConfluentIndicators) {
+                if (volatilityDown.length > 0 || momentumDown.length > 0) {
                     trendDown.push('Bearish rejection reaction off key resistance level against prior bullish trend.');
                 } else {
-                    conflicting.push('Bearish completed candle opposes prevailing bullish trend without confirmed structural reversal pattern.');
+                    conflicting.push('Bearish completed candle opposes prevailing bullish trend.');
                 }
             }
 
@@ -296,18 +259,8 @@
             let waitReason = null;
             const supportingEvidence = [];
 
-            // Structural trend confirmation: Requires BOTH Moving Average (EMA 9/21) AND Price Structure
-            const structuralTrendUp = [];
-            const structuralTrendDown = [];
-            if (extracted.movingAverage === 'BULLISH' && extracted.priceStructure === 'HIGHER_HIGHS_HIGHER_LOWS') {
-                structuralTrendUp.push('Price structure (Higher Highs/Lows) and Moving Average (EMA 9/21) confirm bullish trend alignment.');
-            }
-            if (extracted.movingAverage === 'BEARISH' && extracted.priceStructure === 'LOWER_HIGHS_LOWER_LOWS') {
-                structuralTrendDown.push('Price structure (Lower Highs/Lows) and Moving Average (EMA 9/21) confirm bearish trend alignment.');
-            }
-
-            const independentUp = [...momentumUp, ...volatilityUp, ...structuralTrendUp];
-            const independentDown = [...momentumDown, ...volatilityDown, ...structuralTrendDown];
+            const independentUp = [...momentumUp, ...volatilityUp];
+            const independentDown = [...momentumDown, ...volatilityDown];
 
             if (priceActionUp.length > 0 && priceActionDown.length === 0) {
                 if (conflicting.length > 0) {
@@ -397,57 +350,7 @@
                 volatilityEvidence: volatilityUp.length > 0 ? volatilityUp.slice() : volatilityDown.slice(),
                 waitReason,
                 indicatorsEvaluated: indicators,
-                analyzedAt: now,
-                signalGeneratedAt: (candidate === 'UP' || candidate === 'DOWN') ? now : null,
-                candleClosedAt: extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt) || null,
-                signalStatus: (() => {
-                    if (candidate === 'WAIT') {
-                        if (!candleCompleted) return 'WAITING_FOR_CANDLE_CLOSE';
-                        if (conflicting.length > 0) return 'WAIT — CONFLICTING EVIDENCE';
-                        return 'WAIT — NO SAFE ENTRY';
-                    }
-                    // Candidate is UP or DOWN
-                    if (!candleCompleted) return 'WAITING_FOR_CANDLE_CLOSE';
-                    const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);
-                    if (candleCloseTime) {
-                        const entryWindowExpiresAt = candleCloseTime + 60000; // 1-minute fixed window from candle close
-                        if (now > entryWindowExpiresAt) return 'ENTRY_WINDOW_EXPIRED';
-                        if (now > candleCloseTime + 5000) return 'SIGNAL_CONFIRMED — ENTRY WINDOW CLOSING';
-                    }
-                    return 'SIGNAL_CONFIRMED';
-                })(),
-                signalState: (() => {
-                    if (extracted.dataQuality === 'INVALID' || extracted.dataQuality === 'INSUFFICIENT_DATA') {
-                        return 'DATA UNAVAILABLE';
-                    }
-                    if (!candleCompleted) {
-                        return 'WAITING FOR CANDLE CLOSE';
-                    }
-                    if (candidate === 'WAIT') {
-                        if (conflicting.length > 0) {
-                            return 'WAIT';
-                        }
-                        if ((priceActionUp.length > 0 || priceActionDown.length > 0) && independentUp.length === 0 && independentDown.length === 0) {
-                            return 'WAITING FOR CONFIRMATION';
-                        }
-                        return 'WAIT';
-                    }
-                    // Candidate is UP or DOWN
-                    const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);
-                    if (candleCloseTime) {
-                        const entryWindowExpiresAt = candleCloseTime + 60000;
-                        if (now > entryWindowExpiresAt) return 'ENTRY WINDOW EXPIRED';
-                    }
-                    return candidate === 'UP' ? 'UP CONFIRMED' : 'DOWN CONFIRMED';
-                })(),
-                recommendedEntryBy: (() => {
-                    const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);
-                    return candleCloseTime ? candleCloseTime + 2000 : null; // Recommend entry within 2s of candle close
-                })(),
-                entryWindowExpiresAt: (() => {
-                    const candleCloseTime = extracted.candleClosedAt || (extracted.lastCompletedCandle && extracted.lastCompletedCandle.candleClosedAt);
-                    return candleCloseTime ? candleCloseTime + 60000 : null; // 1-minute expiry aligned to candle close
-                })()
+                analyzedAt: now
             };
         }
 

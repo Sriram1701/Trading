@@ -145,47 +145,6 @@
                     <span>Total Local: <strong id="localEngineLatency">--</strong></span>
                 </div>
 
-                <!-- 1b. LIVE PRECISION DIAGNOSTIC DASHBOARD -->
-                <div class="diagnostic-panel" id="diagnosticPanel" style="margin-top:0.6rem;padding:0.75rem 1rem;background:rgba(12,20,33,0.85);border:1px solid #233145;border-radius:8px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
-                        <span style="font-size:0.75rem;font-weight:700;color:#38bdf8;text-transform:uppercase;letter-spacing:0.5px;">Precision Signal Diagnostics</span>
-                        <span id="diagLastEvalTime" style="font-size:0.75rem;color:#8ba2b5;font-family:monospace;">Last Eval: Not evaluated</span>
-                    </div>
-                    <div class="live-telemetry-grid" style="margin-bottom:0.5rem;">
-                        <div class="telemetry-item">
-                            <span class="telemetry-label">Frames Received</span>
-                            <span id="diagFramesReceived" class="telemetry-val">0</span>
-                        </div>
-                        <div class="telemetry-item">
-                            <span class="telemetry-label">Frames Rejected</span>
-                            <span id="diagFramesRejected" class="telemetry-val">0</span>
-                        </div>
-                        <div class="telemetry-item">
-                            <span class="telemetry-label">Candles Detected</span>
-                            <span id="diagCandlesDetected" class="telemetry-val">0</span>
-                        </div>
-                        <div class="telemetry-item">
-                            <span class="telemetry-label">Completed Candles</span>
-                            <span id="diagCompletedCandles" class="telemetry-val">0</span>
-                        </div>
-                        <div class="telemetry-item">
-                            <span class="telemetry-label">Indicator Availability</span>
-                            <span id="diagIndicatorAvailability" class="telemetry-val" style="font-size:0.72rem;">Checking…</span>
-                        </div>
-                        <div class="telemetry-item">
-                            <span class="telemetry-label">Current Engine State</span>
-                            <span id="diagEngineState" class="telemetry-val" style="font-size:0.72rem;">WAIT</span>
-                        </div>
-                        <div class="telemetry-item">
-                            <span class="telemetry-label">Current Validator State</span>
-                            <span id="diagValidatorState" class="telemetry-val" style="font-size:0.72rem;">WAIT</span>
-                        </div>
-                    </div>
-                    <div style="font-size:0.75rem;color:#8ba2b5;background:rgba(0,0,0,0.3);padding:0.4rem 0.6rem;border-radius:4px;word-break:break-word;">
-                        <strong style="color:#cbd5e1;">Most Recent WAIT Reason:</strong> <span id="diagWaitReason" style="color:#e2e8f0;">Awaiting live monitoring start…</span>
-                    </div>
-                </div>
-
                 <div id="livePreviewContainer" class="live-preview-container" hidden>
                     <video id="liveScreenPreview" class="live-preview" playsinline muted></video>
                 </div>
@@ -200,18 +159,12 @@
                     <h1 id="signalDirection" class="signal-direction" data-direction="WAIT" aria-live="polite">WAIT</h1>
                     <span id="signalStrengthBadge" class="signal-strength-badge wait" data-strength="WAIT">WAIT</span>
                 </div>
-                <!-- Signal Status & Entry Window (NEW) -->
-                <div class="signal-timing-row">
-                    <span id="signalStatusBadge" class="signal-status-badge unknown" data-status="UNKNOWN" aria-live="polite">UNKNOWN</span>
-                    <span id="entryWindowCountdown" class="entry-window-countdown" aria-live="polite"></span>
-                </div>
                 <div class="signal-sub-badges" id="signalSubBadges">
                     <span id="trendDirectionBadge" class="sub-badge">Trend: --</span>
                     <span id="momentumDirectionBadge" class="sub-badge">Momentum: --</span>
                     <span id="volatilityDirectionBadge" class="sub-badge">Volatility: --</span>
                 </div>
                 <p id="marketDataStatus" class="signal-reason" role="status" aria-live="polite">Waiting for live monitoring to start.</p>
-                <p id="candleCloseTimestamp" class="candle-close-timestamp" aria-live="polite">Candle close: --</p>
                 
                 <!-- Trade Placement Confirmation (Optional User Manual Action) -->
                 <div id="tradeConfirmationBar" class="trade-confirmation-bar" style="display:none;">

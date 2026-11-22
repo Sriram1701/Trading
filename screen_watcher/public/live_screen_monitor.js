@@ -69,34 +69,6 @@
         };
         const MAX_STALENESS_MS = 30000; // 30s threshold: candles move faster than stale visual results
 
-        const diagMetrics = {
-            framesReceived: 0,
-            framesRejected: 0,
-            candlesDetected: 0,
-            completedCandles: 0,
-            indicatorAvailability: 'Checking…',
-            engineState: 'WAIT',
-            validatorState: 'WAIT',
-            waitReason: 'Awaiting live monitoring start…',
-            lastEvalTime: null
-        };
-
-        function updateDiagnosticsUI() {
-            if (elements.diagFramesReceived) elements.diagFramesReceived.textContent = diagMetrics.framesReceived;
-            if (elements.diagFramesRejected) elements.diagFramesRejected.textContent = diagMetrics.framesRejected;
-            if (elements.diagCandlesDetected) elements.diagCandlesDetected.textContent = diagMetrics.candlesDetected;
-            if (elements.diagCompletedCandles) elements.diagCompletedCandles.textContent = diagMetrics.completedCandles;
-            if (elements.diagIndicatorAvailability) elements.diagIndicatorAvailability.textContent = diagMetrics.indicatorAvailability;
-            if (elements.diagEngineState) elements.diagEngineState.textContent = diagMetrics.engineState;
-            if (elements.diagValidatorState) elements.diagValidatorState.textContent = diagMetrics.validatorState;
-            if (elements.diagWaitReason) elements.diagWaitReason.textContent = diagMetrics.waitReason;
-            if (elements.diagLastEvalTime) {
-                elements.diagLastEvalTime.textContent = diagMetrics.lastEvalTime
-                    ? `Last Eval: ${new Date(diagMetrics.lastEvalTime).toLocaleTimeString()}`
-                    : 'Last Eval: Not evaluated';
-            }
-        }
-
         function setAiStatus(statusText) {
             if (elements.aiProcessingStatus) elements.aiProcessingStatus.textContent = statusText;
         }
@@ -107,10 +79,6 @@
                 elements.signalDirection.dataset.direction = 'WAIT';
             }
             if (elements.signalStatus) elements.signalStatus.textContent = reason;
-            diagMetrics.engineState = 'WAIT';
-            diagMetrics.validatorState = 'WAIT';
-            diagMetrics.waitReason = reason;
-            updateDiagnosticsUI();
         }
 
         function setMonitoringStatus(message) {
@@ -255,48 +223,6 @@
                 elements.signalStrengthBadge.textContent = strength;
                 elements.signalStrengthBadge.dataset.strength = strength;
                 elements.signalStrengthBadge.className = `signal-strength-badge ${strength.toLowerCase()}`;
-            }
-            // Signal Status Badge (8 Canonical States):
-            // ANALYZING, WAITING FOR CONFIRMATION, WAIT, UP CONFIRMED, DOWN CONFIRMED, ENTRY WINDOW EXPIRED, DATA UNAVAILABLE, WAITING FOR CANDLE CLOSE
-            if (elements.signalStatusBadge) {
-                const status = analysis.signalState || analysis.signalStatus || 'WAIT';
-                elements.signalStatusBadge.textContent = status;
-                elements.signalStatusBadge.dataset.status = status.replace(/\s+/g, '_').toUpperCase();
-                elements.signalStatusBadge.className = `signal-status-badge ${
-                    status.includes('WAITING FOR CANDLE CLOSE') || status.includes('WAITING_FOR_CANDLE_CLOSE') ? 'waiting-candle' :
-                    status.includes('CONFIRMATION') ? 'waiting-conf' :
-                    status.includes('CONFIRMED') ? 'confirmed' :
-                    status.includes('EXPIRED') ? 'expired' :
-                    status.includes('UNAVAILABLE') ? 'unavailable' :
-                    status.includes('ANALYZING') ? 'analyzing' : 'wait'
-                }`;
-            }
-            // Entry Window Countdown
-            if (elements.entryWindowCountdown) {
-                if (analysis.entryWindowExpiresAt) {
-                    const remainingMs = analysis.entryWindowExpiresAt - sampleTime;
-                    if (remainingMs > 0) {
-                        const remainingSec = Math.ceil(remainingMs / 1000);
-                        elements.entryWindowCountdown.textContent = `Entry window: ${remainingSec}s remaining`;
-                        elements.entryWindowCountdown.dataset.remaining = remainingSec;
-                        elements.entryWindowCountdown.className = remainingSec <= 10 ? 'countdown-critical' : remainingSec <= 30 ? 'countdown-warning' : 'countdown-ok';
-                    } else {
-                        elements.entryWindowCountdown.textContent = 'ENTRY WINDOW EXPIRED';
-                        elements.entryWindowCountdown.className = 'countdown-expired';
-                    }
-                } else {
-                    elements.entryWindowCountdown.textContent = '';
-                    elements.entryWindowCountdown.className = '';
-                }
-            }
-            // Candle Close Timestamp Display
-            if (elements.candleCloseTimestamp) {
-                if (analysis.candleClosedAt) {
-                    const closeTime = new Date(analysis.candleClosedAt);
-                    elements.candleCloseTimestamp.textContent = `Candle closed: ${closeTime.toLocaleTimeString()}.${String(closeTime.getMilliseconds()).padStart(3, '0')}`;
-                } else {
-                    elements.candleCloseTimestamp.textContent = 'Candle close: --';
-                }
             }
             if (elements.trendDirectionBadge) {
                 const tr = (analysis.observations && analysis.observations.trend) || 'Neutral';
@@ -511,7 +437,6 @@
                 return;
             }
             const sampleTime = now();
-            diagMetrics.framesReceived += 1;
             const resumedAfterGap = lastFrameAt !== null &&
                 sampleTime - lastFrameAt > samplingIntervalMs * 3;
             if (resumedAfterGap && typeof resetObserver === 'function') resetObserver();
@@ -521,9 +446,6 @@
                 const captureDone = now();
                 const captureLatencyMs = Math.max(0, captureDone - captureStart);
                 if (!frame) {
-                    diagMetrics.framesRejected += 1;
-                    diagMetrics.waitReason = 'Waiting for usable video frame.';
-                    updateDiagnosticsUI();
                     setMonitoringStatus('Waiting for the first shared video frame.');
                     if (elements.frameFreshness && lastFrameAt === null) {
                         elements.frameFreshness.textContent = 'No frames received';
@@ -540,9 +462,6 @@
                 describeObservation(observation, resumedAfterGap);
 
                 if (!observation.chartVisibleCandidate) {
-                    diagMetrics.framesRejected += 1;
-                    diagMetrics.waitReason = 'Chart area not detected. Focus or switch to the Quotex chart tab.';
-                    updateDiagnosticsUI();
                     setWait('WAIT — Chart area not detected. Focus or switch to the Quotex chart tab.');
                     return;
                 }
@@ -668,23 +587,6 @@
                         }
                     }
 
-                    // Live Diagnostic Dashboard Metrics Update
-                    diagMetrics.candlesDetected = (extracted && extracted.candlesCount) || 0;
-                    if (extracted && extracted.candleCompleted) {
-                        diagMetrics.completedCandles += 1;
-                    }
-                    const rsiZone = (extracted && extracted.rsiVisualZone) || 'OFF';
-                    const rsiSlope = (extracted && extracted.rsiSlope) || 'FLAT';
-                    const rsiStr = rsiZone !== 'UNAVAILABLE' && (rsiZone !== 'NEUTRAL' || rsiSlope !== 'FLAT') ? `RSI:${rsiZone}` : 'RSI:OFF';
-                    const bbStr = extracted && extracted.bollingerPosition && extracted.bollingerPosition !== 'UNAVAILABLE' ? `BB:${extracted.bollingerPosition}` : 'BB:OFF';
-                    const emaStr = extracted && extracted.movingAverage ? `EMA:${extracted.movingAverage}` : 'EMA:FLAT';
-                    diagMetrics.indicatorAvailability = `${rsiStr} | ${bbStr} | ${emaStr}`;
-                    diagMetrics.engineState = (localResult && (localResult.signalState || localResult.candidate)) || 'WAIT';
-                    diagMetrics.validatorState = (finalAnalysis && (finalAnalysis.signalState || finalAnalysis.direction)) || 'WAIT';
-                    diagMetrics.waitReason = (finalAnalysis && finalAnalysis.explanation) || (localResult && localResult.waitReason) || 'WAIT — Evaluating live candle structure';
-                    diagMetrics.lastEvalTime = sampleTime;
-                    updateDiagnosticsUI();
-
                     setAiStatus(analyzing
                         ? 'Vision verifying in background (qwen3-vl:4b)…'
                         : 'Ready · Local Fast Engine Active');
@@ -695,17 +597,6 @@
                         void outcomeTracker.trackSignal(finalAnalysis, {
                             entryPrice: extracted ? extracted.currentPrice : null,
                             expiryDuration: 60
-                        });
-                    }
-
-                    if (outcomeTracker && typeof outcomeTracker.recordCandidateAudit === 'function' && localResult) {
-                        void outcomeTracker.recordCandidateAudit({
-                            candidate: localResult.candidate,
-                            approved: finalAnalysis.direction === 'UP' || finalAnalysis.direction === 'DOWN',
-                            signalStrength: finalAnalysis.signal_strength || 'WAIT',
-                            rejectionReason: finalAnalysis.explanation || localResult.waitReason || null,
-                            candleId: localResult.candleId || null,
-                            timestamp: new Date(sampleTime).toISOString()
                         });
                     }
 
@@ -978,21 +869,7 @@
             upCandidatesCount: byId('upCandidatesCount'),
             downCandidatesCount: byId('downCandidatesCount'),
             upApprovedCount: byId('upApprovedCount'),
-            downApprovedCount: byId('downApprovedCount'),
-            // New timing elements
-            signalStatusBadge: byId('signalStatusBadge'),
-            entryWindowCountdown: byId('entryWindowCountdown'),
-            candleCloseTimestamp: byId('candleCloseTimestamp'),
-            // Precision Diagnostics Elements
-            diagLastEvalTime: byId('diagLastEvalTime'),
-            diagFramesReceived: byId('diagFramesReceived'),
-            diagFramesRejected: byId('diagFramesRejected'),
-            diagCandlesDetected: byId('diagCandlesDetected'),
-            diagCompletedCandles: byId('diagCompletedCandles'),
-            diagIndicatorAvailability: byId('diagIndicatorAvailability'),
-            diagEngineState: byId('diagEngineState'),
-            diagValidatorState: byId('diagValidatorState'),
-            diagWaitReason: byId('diagWaitReason')
+            downApprovedCount: byId('downApprovedCount')
         };
         if (Object.values(elements).slice(0, 10).some(element => !element) || !video || !preview || !context) return null;
 

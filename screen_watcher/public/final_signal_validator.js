@@ -81,22 +81,12 @@
                 // Directional candidate ('UP' or 'DOWN') from local engine
                 const candidate = localResult.candidate;
 
-                // Guard 3: Completed Candle, Expiry, & Conflict Requirement
-                if (!localResult.candleCompleted || localResult.signalStatus === 'WAITING_FOR_CANDLE_CLOSE') {
+                // Guard 3: Completed Candle Requirement
+                if (!localResult.candleCompleted) {
                     direction = 'WAIT';
                     explanation = `WAIT — Candle forming in ${candidate} direction. Awaiting completed candle close to confirm signal.`;
                     uncertainties.push('Forming candle has not yet closed; premature signals rejected.');
                     confidence = 'LOW';
-                } else if (localResult.signalStatus === 'ENTRY_WINDOW_EXPIRED' || (localResult.entryWindowExpiresAt && now > localResult.entryWindowExpiresAt)) {
-                    direction = 'WAIT';
-                    explanation = 'WAIT — Recommended entry window has expired (1-minute candle limit). Signal discarded to protect execution timing.';
-                    uncertainties.push('Entry window expired; entry timing threshold exceeded.');
-                    confidence = 'WAIT';
-                } else if (localResult.conflictingEvidence && localResult.conflictingEvidence.length > 0) {
-                    direction = 'WAIT';
-                    explanation = `WAIT — Conflicting technical factors: ${localResult.conflictingEvidence.join(' ')}`;
-                    uncertainties.push(...localResult.conflictingEvidence);
-                    confidence = 'WAIT';
                 } else {
                     // Local engine confirmed completed candle with >= 2 factors
                     // Guard 4: Secondary Qwen3-VL Vision Verification Inspection
@@ -163,35 +153,12 @@
                 qualityLevel = `${signalStrength} ${direction}`;
             }
 
-            // Determine canonical application-wide signalState (one of the 8 standard states)
-            let signalState = 'WAIT';
-            if (frameAgeMs > MAX_STALENESS_MS) {
-                signalState = 'DATA UNAVAILABLE';
-            } else if (localResult && (localResult.dataQuality === 'INVALID' || localResult.dataQuality === 'INSUFFICIENT_DATA')) {
-                signalState = 'DATA UNAVAILABLE';
-            } else if (localResult && (!localResult.candleCompleted || localResult.signalStatus === 'WAITING_FOR_CANDLE_CLOSE')) {
-                signalState = 'WAITING FOR CANDLE CLOSE';
-            } else if (localResult && (localResult.signalStatus === 'ENTRY_WINDOW_EXPIRED' || (localResult.entryWindowExpiresAt && now > localResult.entryWindowExpiresAt))) {
-                signalState = 'ENTRY WINDOW EXPIRED';
-            } else if (direction === 'UP') {
-                signalState = 'UP CONFIRMED';
-            } else if (direction === 'DOWN') {
-                signalState = 'DOWN CONFIRMED';
-            } else if (localResult && localResult.conflictingEvidence && localResult.conflictingEvidence.length > 0) {
-                signalState = 'WAIT';
-            } else if (localResult && (localResult.signalState === 'WAITING FOR CONFIRMATION' || localResult.signalStatus === 'WAIT — NO INDEPENDENT CONFIRMATION')) {
-                signalState = 'WAITING FOR CONFIRMATION';
-            } else {
-                signalState = 'WAIT';
-            }
-
             // Comprehensive Signal Audit Log Record (No fabricated OHLC or indicator numbers)
             const audit = {
                 timestamp: new Date(now).toISOString(),
                 signal: direction,
                 signalStrength,
                 qualityLevel,
-                signalState,
                 candidateDirection: (localResult && localResult.candidate) || 'WAIT',
                 approved: direction === 'UP' || direction === 'DOWN',
                 candleIdentity: (localResult && localResult.candleId) || 'candle-current',
@@ -205,15 +172,7 @@
                 finalValidationReason: explanation,
                 frameFreshness: frameAgeMs <= MAX_STALENESS_MS ? `Fresh (${(frameAgeMs / 1000).toFixed(2)}s)` : `Stale (${(frameAgeMs / 1000).toFixed(2)}s)`,
                 localProcessingLatency: `${((telemetry && telemetry.totalLocalLatencyMs) || 0).toFixed(3)}ms`,
-                visionVerificationStatus: visionResult ? (now - (visionResult.analyzed_at || now) > MAX_STALENESS_MS ? 'UNVERIFIED_EXPIRED' : `VERIFIED_${visionResult.direction}`) : 'UNVERIFIED_PENDING',
-                // New timing audit fields
-                signalStatus: localResult ? localResult.signalStatus : 'UNKNOWN',
-                signalGeneratedAt: localResult ? localResult.signalGeneratedAt : null,
-                candleClosedAt: localResult ? localResult.candleClosedAt : null,
-                recommendedEntryBy: localResult ? localResult.recommendedEntryBy : null,
-                entryWindowExpiresAt: localResult ? localResult.entryWindowExpiresAt : null,
-                timeSinceCandleClose: (localResult && localResult.candleClosedAt) ? now - localResult.candleClosedAt : null,
-                timeUntilEntryWindowExpires: (localResult && localResult.entryWindowExpiresAt) ? localResult.entryWindowExpiresAt - now : null
+                visionVerificationStatus: visionResult ? (now - (visionResult.analyzed_at || now) > MAX_STALENESS_MS ? 'UNVERIFIED_EXPIRED' : `VERIFIED_${visionResult.direction}`) : 'UNVERIFIED_PENDING'
             };
 
             return {
@@ -221,20 +180,13 @@
                 direction,
                 signal_strength: signalStrength,
                 quality_level: qualityLevel,
-                signalState,
                 explanation,
                 observations,
                 uncertainties,
                 confidence,
                 analyzed_at: now,
                 telemetry,
-                audit,
-                // Pass through timing fields for UI
-                signalStatus: localResult ? localResult.signalStatus : 'UNKNOWN',
-                signalGeneratedAt: localResult ? localResult.signalGeneratedAt : null,
-                candleClosedAt: localResult ? localResult.candleClosedAt : null,
-                recommendedEntryBy: localResult ? localResult.recommendedEntryBy : null,
-                entryWindowExpiresAt: localResult ? localResult.entryWindowExpiresAt : null
+                audit
             };
         }
 
