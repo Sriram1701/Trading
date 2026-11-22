@@ -215,11 +215,13 @@ test('EP-7: Missing indicators strictly return WAIT and WAITING FOR CONFIRMATION
     const engine = engineApi.createEngine();
     const validator = validatorApi.createValidator();
 
-    // Bullish candle, but Bollinger is UNAVAILABLE and RSI is NEUTRAL/FLAT
+    // Bullish candle, but indicators (Bollinger, RSI, Moving Average) are UNAVAILABLE/FLAT
     const extraction = createBaseExtraction({
         bollingerPosition: 'UNAVAILABLE',
         rsiVisualZone: 'NEUTRAL',
-        rsiSlope: 'FLAT'
+        rsiSlope: 'FLAT',
+        movingAverage: 'FLAT',
+        priceStructure: 'SIDEWAYS'
     });
 
     const localResult = engine.evaluate(extraction, BASE_TIME);
@@ -360,4 +362,73 @@ test('EP-12: All 8 Canonical Signal States are verified and distinct', () => {
     const unique = new Set(expectedStates);
     assert.equal(unique.size, 8);
     expectedStates.forEach(s => assert.ok(typeof s === 'string' && s.length > 0));
+});
+
+test('EP-13: Structural Confluence (EMA 9/21 + Higher Highs/Lows) confirms UP when Bollinger is Middle/Unavailable', () => {
+    const engine = engineApi.createEngine();
+    const validator = validatorApi.createValidator();
+
+    // Completed green candle with rising EMA and Higher Highs/Lows structure, even without extreme Bollinger touch
+    const extraction = createBaseExtraction({
+        bollingerPosition: 'MIDDLE',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'FLAT',
+        movingAverage: 'BULLISH',
+        priceStructure: 'HIGHER_HIGHS_HIGHER_LOWS',
+        lastCompletedCandle: {
+            id: 'candle_struct_up',
+            polarity: 'BULLISH',
+            height: 22,
+            body: { height: 16, top: 40, bottom: 56 },
+            wicks: { upper: 2, lower: 4 },
+            pattern: 'NORMAL',
+            candleClosedAt: BASE_TIME - 1000
+        },
+        candleClosedAt: BASE_TIME - 1000
+    });
+
+    const localResult = engine.evaluate(extraction, BASE_TIME);
+    assert.equal(localResult.candidate, 'UP');
+    assert.equal(localResult.signalState, 'UP CONFIRMED');
+    assert.ok(localResult.supportingEvidence.some(e => e.includes('EMA 9/21')));
+
+    const validated = validator.validate({ localResult, now: BASE_TIME });
+    assert.equal(validated.direction, 'UP');
+    assert.equal(validated.signalState, 'UP CONFIRMED');
+    assert.equal(validated.audit.approved, true);
+});
+
+test('EP-14: Structural Confluence (EMA 9/21 + Lower Highs/Lows) confirms DOWN when Bollinger is Middle/Unavailable', () => {
+    const engine = engineApi.createEngine();
+    const validator = validatorApi.createValidator();
+
+    // Completed red candle with declining EMA and Lower Highs/Lows structure, even without extreme Bollinger touch
+    const extraction = createBaseExtraction({
+        visualTrend: 'BEARISH',
+        bollingerPosition: 'MIDDLE',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'FLAT',
+        movingAverage: 'BEARISH',
+        priceStructure: 'LOWER_HIGHS_LOWER_LOWS',
+        lastCompletedCandle: {
+            id: 'candle_struct_down',
+            polarity: 'BEARISH',
+            height: 22,
+            body: { height: 16, top: 50, bottom: 66 },
+            wicks: { upper: 4, lower: 2 },
+            pattern: 'NORMAL',
+            candleClosedAt: BASE_TIME - 1000
+        },
+        candleClosedAt: BASE_TIME - 1000
+    });
+
+    const localResult = engine.evaluate(extraction, BASE_TIME);
+    assert.equal(localResult.candidate, 'DOWN');
+    assert.equal(localResult.signalState, 'DOWN CONFIRMED');
+    assert.ok(localResult.supportingEvidence.some(e => e.includes('EMA 9/21')));
+
+    const validated = validator.validate({ localResult, now: BASE_TIME });
+    assert.equal(validated.direction, 'DOWN');
+    assert.equal(validated.signalState, 'DOWN CONFIRMED');
+    assert.equal(validated.audit.approved, true);
 });

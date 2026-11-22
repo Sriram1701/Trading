@@ -365,9 +365,9 @@
                 let isNewCandleFormed = false;
 
                 if (candles.length > previousCandlesCount) {
-                    // Only accept as a newly formed candle if the rightmost candle is positioned to the right of previous forming candle by >= stride * 0.65
+                    // A new candle column has formed to the right of previous forming candle
                     const actualAdvance = rightmostCandle.centerX - trackedFormingCandle.centerX;
-                    if (actualAdvance >= stride * 0.65) {
+                    if (actualAdvance >= Math.max(3, Math.floor(stride * 0.25))) {
                         isNewCandleFormed = true;
                     } else {
                         // Same candle: update forming coordinates

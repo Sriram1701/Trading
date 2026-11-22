@@ -296,8 +296,18 @@
             let waitReason = null;
             const supportingEvidence = [];
 
-            const independentUp = [...momentumUp, ...volatilityUp];
-            const independentDown = [...momentumDown, ...volatilityDown];
+            // Structural trend confirmation: Requires BOTH Moving Average (EMA 9/21) AND Price Structure
+            const structuralTrendUp = [];
+            const structuralTrendDown = [];
+            if (extracted.movingAverage === 'BULLISH' && extracted.priceStructure === 'HIGHER_HIGHS_HIGHER_LOWS') {
+                structuralTrendUp.push('Price structure (Higher Highs/Lows) and Moving Average (EMA 9/21) confirm bullish trend alignment.');
+            }
+            if (extracted.movingAverage === 'BEARISH' && extracted.priceStructure === 'LOWER_HIGHS_LOWER_LOWS') {
+                structuralTrendDown.push('Price structure (Lower Highs/Lows) and Moving Average (EMA 9/21) confirm bearish trend alignment.');
+            }
+
+            const independentUp = [...momentumUp, ...volatilityUp, ...structuralTrendUp];
+            const independentDown = [...momentumDown, ...volatilityDown, ...structuralTrendDown];
 
             if (priceActionUp.length > 0 && priceActionDown.length === 0) {
                 if (conflicting.length > 0) {
