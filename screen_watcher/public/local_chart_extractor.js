@@ -64,9 +64,9 @@
 
             // Chart area bounds: strictly isolates the central candlestick chart
             // Excludes top header/asset bar & promotional banners (y < 24%), left navigation bar (x < 8%),
-            // right trade execution buttons/panel (x > 75%), and bottom oscillator panel (y > 70%)
+            // right trade execution buttons/panel (x > 84%), and bottom oscillator panel (y > 70%)
             const chartStartX = Math.floor(width * 0.08);
-            const chartEndX = Math.floor(width * 0.75);
+            const chartEndX = Math.floor(width * 0.83);
             const chartStartY = Math.floor(height * 0.24);
             const chartEndY = Math.floor(height * 0.70); // Upper chart area
             const subPanelStartY = Math.floor(height * 0.71);
@@ -83,6 +83,7 @@
             const columnBottom = new Array(width).fill(-1);
 
             const minRun = Math.min(5, Math.max(3, Math.floor(height * 0.015)));
+            const minSpan = Math.max(6, Math.floor(height * 0.012));
 
             for (let x = chartStartX; x < chartEndX; x += 1) {
                 let maxG = 0, curG = 0;
@@ -127,12 +128,15 @@
                     }
                 }
 
-                if (maxG >= minRun && maxG >= maxR) {
+                const spanG = botG >= topG ? botG - topG + 1 : 0;
+                const spanR = botR >= topR ? botR - topR + 1 : 0;
+
+                if (maxG >= minRun && spanG >= minSpan && maxG >= maxR) {
                     columnHasCandle[x] = true;
                     columnColor[x] = 'BULLISH';
                     columnTop[x] = topG;
                     columnBottom[x] = botG;
-                } else if (maxR >= minRun && maxR > maxG) {
+                } else if (maxR >= minRun && spanR >= minSpan && maxR > maxG) {
                     columnHasCandle[x] = true;
                     columnColor[x] = 'BEARISH';
                     columnTop[x] = topR;
@@ -268,6 +272,8 @@
                 c.body = { top: bodyTop, bottom: bodyBottom, height: bodyHeight };
                 c.wicks = { upper: upperWick, lower: lowerWick };
                 c.pattern = pattern;
+                c.x = c.centerX;
+                c.id = `candle_${candles.length + 1}`;
 
                 candles.push(c);
             }

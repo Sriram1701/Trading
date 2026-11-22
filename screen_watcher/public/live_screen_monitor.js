@@ -69,6 +69,34 @@
         };
         const MAX_STALENESS_MS = 30000; // 30s threshold: candles move faster than stale visual results
 
+        const diagMetrics = {
+            framesReceived: 0,
+            framesRejected: 0,
+            candlesDetected: 0,
+            completedCandles: 0,
+            indicatorAvailability: 'Checking…',
+            engineState: 'WAIT',
+            validatorState: 'WAIT',
+            waitReason: 'Awaiting live monitoring start…',
+            lastEvalTime: null
+        };
+
+        function updateDiagnosticsUI() {
+            if (elements.diagFramesReceived) elements.diagFramesReceived.textContent = diagMetrics.framesReceived;
+            if (elements.diagFramesRejected) elements.diagFramesRejected.textContent = diagMetrics.framesRejected;
+            if (elements.diagCandlesDetected) elements.diagCandlesDetected.textContent = diagMetrics.candlesDetected;
+            if (elements.diagCompletedCandles) elements.diagCompletedCandles.textContent = diagMetrics.completedCandles;
+            if (elements.diagIndicatorAvailability) elements.diagIndicatorAvailability.textContent = diagMetrics.indicatorAvailability;
+            if (elements.diagEngineState) elements.diagEngineState.textContent = diagMetrics.engineState;
+            if (elements.diagValidatorState) elements.diagValidatorState.textContent = diagMetrics.validatorState;
+            if (elements.diagWaitReason) elements.diagWaitReason.textContent = diagMetrics.waitReason;
+            if (elements.diagLastEvalTime) {
+                elements.diagLastEvalTime.textContent = diagMetrics.lastEvalTime
+                    ? `Last Eval: ${new Date(diagMetrics.lastEvalTime).toLocaleTimeString()}`
+                    : 'Last Eval: Not evaluated';
+            }
+        }
+
         function setAiStatus(statusText) {
             if (elements.aiProcessingStatus) elements.aiProcessingStatus.textContent = statusText;
         }
@@ -79,6 +107,10 @@
                 elements.signalDirection.dataset.direction = 'WAIT';
             }
             if (elements.signalStatus) elements.signalStatus.textContent = reason;
+            diagMetrics.engineState = 'WAIT';
+            diagMetrics.validatorState = 'WAIT';
+            diagMetrics.waitReason = reason;
+            updateDiagnosticsUI();
         }
 
         function setMonitoringStatus(message) {
@@ -479,6 +511,7 @@
                 return;
             }
             const sampleTime = now();
+            diagMetrics.framesReceived += 1;
             const resumedAfterGap = lastFrameAt !== null &&
                 sampleTime - lastFrameAt > samplingIntervalMs * 3;
             if (resumedAfterGap && typeof resetObserver === 'function') resetObserver();
@@ -488,6 +521,9 @@
                 const captureDone = now();
                 const captureLatencyMs = Math.max(0, captureDone - captureStart);
                 if (!frame) {
+                    diagMetrics.framesRejected += 1;
+                    diagMetrics.waitReason = 'Waiting for usable video frame.';
+                    updateDiagnosticsUI();
                     setMonitoringStatus('Waiting for the first shared video frame.');
                     if (elements.frameFreshness && lastFrameAt === null) {
                         elements.frameFreshness.textContent = 'No frames received';
@@ -504,6 +540,9 @@
                 describeObservation(observation, resumedAfterGap);
 
                 if (!observation.chartVisibleCandidate) {
+                    diagMetrics.framesRejected += 1;
+                    diagMetrics.waitReason = 'Chart area not detected. Focus or switch to the Quotex chart tab.';
+                    updateDiagnosticsUI();
                     setWait('WAIT — Chart area not detected. Focus or switch to the Quotex chart tab.');
                     return;
                 }
@@ -628,6 +667,23 @@
                             elements.frameFreshness.className = 'telemetry-val fresh';
                         }
                     }
+
+                    // Live Diagnostic Dashboard Metrics Update
+                    diagMetrics.candlesDetected = (extracted && extracted.candlesCount) || 0;
+                    if (extracted && extracted.candleCompleted) {
+                        diagMetrics.completedCandles += 1;
+                    }
+                    const rsiZone = (extracted && extracted.rsiVisualZone) || 'OFF';
+                    const rsiSlope = (extracted && extracted.rsiSlope) || 'FLAT';
+                    const rsiStr = rsiZone !== 'UNAVAILABLE' && (rsiZone !== 'NEUTRAL' || rsiSlope !== 'FLAT') ? `RSI:${rsiZone}` : 'RSI:OFF';
+                    const bbStr = extracted && extracted.bollingerPosition && extracted.bollingerPosition !== 'UNAVAILABLE' ? `BB:${extracted.bollingerPosition}` : 'BB:OFF';
+                    const emaStr = extracted && extracted.movingAverage ? `EMA:${extracted.movingAverage}` : 'EMA:FLAT';
+                    diagMetrics.indicatorAvailability = `${rsiStr} | ${bbStr} | ${emaStr}`;
+                    diagMetrics.engineState = (localResult && (localResult.signalState || localResult.candidate)) || 'WAIT';
+                    diagMetrics.validatorState = (finalAnalysis && (finalAnalysis.signalState || finalAnalysis.direction)) || 'WAIT';
+                    diagMetrics.waitReason = (finalAnalysis && finalAnalysis.explanation) || (localResult && localResult.waitReason) || 'WAIT — Evaluating live candle structure';
+                    diagMetrics.lastEvalTime = sampleTime;
+                    updateDiagnosticsUI();
 
                     setAiStatus(analyzing
                         ? 'Vision verifying in background (qwen3-vl:4b)…'
@@ -926,7 +982,17 @@
             // New timing elements
             signalStatusBadge: byId('signalStatusBadge'),
             entryWindowCountdown: byId('entryWindowCountdown'),
-            candleCloseTimestamp: byId('candleCloseTimestamp')
+            candleCloseTimestamp: byId('candleCloseTimestamp'),
+            // Precision Diagnostics Elements
+            diagLastEvalTime: byId('diagLastEvalTime'),
+            diagFramesReceived: byId('diagFramesReceived'),
+            diagFramesRejected: byId('diagFramesRejected'),
+            diagCandlesDetected: byId('diagCandlesDetected'),
+            diagCompletedCandles: byId('diagCompletedCandles'),
+            diagIndicatorAvailability: byId('diagIndicatorAvailability'),
+            diagEngineState: byId('diagEngineState'),
+            diagValidatorState: byId('diagValidatorState'),
+            diagWaitReason: byId('diagWaitReason')
         };
         if (Object.values(elements).slice(0, 10).some(element => !element) || !video || !preview || !context) return null;
 

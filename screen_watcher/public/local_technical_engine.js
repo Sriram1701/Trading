@@ -47,6 +47,7 @@
                         ema: 'UNAVAILABLE',
                         bollinger: 'UNAVAILABLE',
                         rsi: 'UNAVAILABLE',
+                        macd: 'UNAVAILABLE',
                         candles: 'UNAVAILABLE'
                     },
                     analyzedAt: now
@@ -69,6 +70,7 @@
                         ema: 'UNREADABLE',
                         bollinger: 'UNREADABLE',
                         rsi: 'UNREADABLE',
+                        macd: 'UNAVAILABLE',
                         candles: 'UNREADABLE'
                     },
                     analyzedAt: now
@@ -98,6 +100,7 @@
                 ema: 'NEUTRAL',
                 bollinger: 'NEUTRAL',
                 rsi: 'NEUTRAL',
+                macd: 'UNAVAILABLE',
                 candles: 'NEUTRAL'
             };
 
