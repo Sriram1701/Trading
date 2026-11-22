@@ -11,6 +11,7 @@ set "SERVER_PATH=%PROJECT_ROOT%screen_watcher\server.js"
 
 echo ======================================================================
 echo    Quotex Hybrid AI Live Screen Analyzer - One-Click Launcher
+echo    Version: Extreme Precision First (Updated: 22-Nov-2026)
 echo ======================================================================
 echo Project Root: %PROJECT_ROOT%
 echo Server Path:  %SERVER_PATH%
