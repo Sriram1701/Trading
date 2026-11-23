@@ -7,12 +7,14 @@
         root.SignalNotifications = api;
     }
 })(typeof globalThis === 'object' ? globalThis : this, function () {
-    function createController({ onWait, onSignal, onScreenshotAnalysis, onLiveAnalysis, playSound, speakSignal, cooldownMs = 60000 }) {
+    function createController({ onWait, onSignal, onScreenshotAnalysis, onLiveAnalysis, playSound, speakSignal, cooldownMs = 60000 } = {}) {
         const seenSignalIds = new Set();
         const seenScreenshotIds = new Set();
         const seenLiveIds = new Set();
         let lastWaitReason = null;
         let lastLiveDirection = null;
+        let lastLiveCandleId = null;
+        let lastLiveSetupHash = null;
         let lastLiveAlertTime = 0;
 
         function notifyWait(reason) {
@@ -67,21 +69,51 @@
                 ? analysis.id
                 : `live-${now}-${Math.random().toString(36).slice(2, 8)}`;
 
-            if (seenLiveIds.has(signalId)) return false;
+            // SMART DUPLICATE PROTECTION:
+            // 1. Suppress if explicitly marked as duplicate or in ACTIVE_TREND without new confirmation
+            if (analysis.isDuplicate === true || analysis.signalState === 'ACTIVE_TREND') {
+                if (typeof onLiveAnalysis === 'function') onLiveAnalysis(analysis);
+                return false;
+            }
+
+            // 2. Suppress if identical signal ID already notified
+            if (seenLiveIds.has(signalId)) {
+                if (typeof onLiveAnalysis === 'function') onLiveAnalysis(analysis);
+                return false;
+            }
+
+            const candleId = analysis.candleId || (analysis.audit && analysis.audit.candleIdentity) || null;
+            const setupHash = analysis.setupHash || (analysis.audit && analysis.audit.setupHash) || null;
+
+            // 3. Determine if this is a genuine continuation setup
+            const isContinuation = analysis.isContinuation === true ||
+                (analysis.signalState === 'NEW_SIGNAL_CONFIRMED' &&
+                 analysis.direction === lastLiveDirection &&
+                 Boolean(candleId && lastLiveCandleId && candleId !== lastLiveCandleId));
+
+            // 4. Suppress duplicate candles across multiple frames (same candle, same direction)
+            if (candleId && lastLiveCandleId && candleId === lastLiveCandleId && analysis.direction === lastLiveDirection && !isContinuation) {
+                if (typeof onLiveAnalysis === 'function') onLiveAnalysis(analysis);
+                return false;
+            }
+
+            // 5. Directional duplicate check with continuation bypass
+            const isDuplicateDirection = analysis.direction === lastLiveDirection;
+            const withinCooldown = (now - lastLiveAlertTime) < cooldownMs;
+
+            if (isDuplicateDirection && withinCooldown && !isContinuation) {
+                if (typeof onLiveAnalysis === 'function') onLiveAnalysis(analysis);
+                return false;
+            }
+
             seenLiveIds.add(signalId);
             if (seenLiveIds.size > 200) {
                 seenLiveIds.delete(seenLiveIds.values().next().value);
             }
 
-            const isDuplicateDirection = analysis.direction === lastLiveDirection;
-            const withinCooldown = (now - lastLiveAlertTime) < cooldownMs;
-
-            if (isDuplicateDirection && withinCooldown) {
-                if (typeof onLiveAnalysis === 'function') onLiveAnalysis(analysis);
-                return false;
-            }
-
             lastLiveDirection = analysis.direction;
+            lastLiveCandleId = candleId;
+            lastLiveSetupHash = setupHash;
             lastLiveAlertTime = now;
             lastWaitReason = null;
 

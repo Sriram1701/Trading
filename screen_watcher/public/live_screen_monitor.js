@@ -593,7 +593,7 @@
 
                     renderAnalysis(finalAnalysis, sampleTime);
 
-                    if (outcomeTracker && (finalAnalysis.direction === 'UP' || finalAnalysis.direction === 'DOWN')) {
+                    if (outcomeTracker && (finalAnalysis.direction === 'UP' || finalAnalysis.direction === 'DOWN') && !finalAnalysis.isDuplicate) {
                         void outcomeTracker.trackSignal(finalAnalysis, {
                             entryPrice: extracted ? extracted.currentPrice : null,
                             expiryDuration: 60

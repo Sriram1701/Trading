@@ -340,7 +340,7 @@ if (window.SignalNotifications) {
                     tradeConfirmationBar.style.display = 'flex';
                 }
             }
-            if (window.SignalHistory) {
+            if (window.SignalHistory && !analysis.isDuplicate) {
                 try {
                     const currentHistory = window.SignalHistory.loadHistory(window.localStorage, 'qx_signal_history_v1');
                     const record = {

@@ -117,6 +117,9 @@
                 visionStatus: signal.audit ? signal.audit.visionVerificationStatus : 'UNVERIFIED',
                 confidence: signal.confidence || 'MEDIUM',
                 validationReason: signal.explanation || '',
+                signalState: signal.signalState || 'NEW_SIGNAL_CONFIRMED',
+                isContinuation: Boolean(signal.isContinuation),
+                previousSignalId: signal.previousSignalId || null,
                 algorithmVersion: 'v1.1.0-hybrid',
                 tradePlaced: Boolean(options.tradePlaced),
                 outcome: 'PENDING'

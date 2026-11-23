@@ -22,9 +22,14 @@ class PerformanceDB {
     }
 
     initSchema() {
-        // Enable WAL mode for high performance and concurrency
-        this.db.exec('PRAGMA journal_mode = WAL;');
-        this.db.exec('PRAGMA synchronous = NORMAL;');
+        // Enable busy timeout and WAL mode for high performance and concurrency
+        try {
+            this.db.exec('PRAGMA busy_timeout = 5000;');
+            this.db.exec('PRAGMA journal_mode = WAL;');
+            this.db.exec('PRAGMA synchronous = NORMAL;');
+        } catch (e) {
+            // In case journal_mode is locked by active connection, fallback gracefully
+        }
 
         this.db.exec(`
             CREATE TABLE IF NOT EXISTS signals (

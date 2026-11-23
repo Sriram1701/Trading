@@ -71,6 +71,33 @@
                 };
             }
 
+            // Guard: Entry Quality & Missed Entry Detection
+            // If the price move has already taken place before entry, reject the late entry.
+            if (extracted.entryMissed === true ||
+                extracted.priceMovedBeforeEntry === true ||
+                extracted.entryQuality === 'MISSED_ENTRY') {
+                return {
+                    candidate: 'WAIT',
+                    signal_strength: 'WAIT',
+                    confidence_tier: 'NONE',
+                    supportingEvidence: [],
+                    conflictingEvidence: ['Price move has already occurred before entry.'],
+                    dataQuality: extracted.dataQuality || 'VISUAL_ESTIMATE',
+                    candleCompleted: Boolean(extracted.candleCompleted),
+                    candleId: (extracted.lastCompletedCandle && extracted.lastCompletedCandle.id) || (extracted.formingCandle && extracted.formingCandle.id) || 'candle-current',
+                    waitReason: 'WAIT — MISSED ENTRY. Price move has already occurred before entry; late entry rejected.',
+                    missedEntry: true,
+                    indicatorsEvaluated: {
+                        trend: 'MISSED_ENTRY',
+                        ema: 'MISSED_ENTRY',
+                        bollinger: 'MISSED_ENTRY',
+                        rsi: 'MISSED_ENTRY',
+                        candles: 'MISSED_ENTRY'
+                    },
+                    analyzedAt: now
+                };
+            }
+
             // Independent Evidence Categories (Symmetrically Balanced):
             // A. PRICE_ACTION: Completed candle polarity and candlestick patterns
             // B. TREND: Moving average slope, higher-highs/lower-lows, and candle sequence
@@ -247,6 +274,34 @@
                 if (volatilityUp.length > 0) conflicting.push('Bearish price action conflicts with lower Bollinger Band support.');
             }
 
+            // Multi-Time Window Context Evaluation:
+            // 1-minute: Immediate entry setup (price action on current completed candle)
+            // 2-minute: Short-term continuation or reversal context (2-candle sequence)
+            // 5-minute: Broader trend context
+            const fiveMinuteContext = extracted.fiveMinuteContext || extracted.broaderTrendContext || null;
+            const twoMinuteContext = extracted.twoMinuteContext || null;
+            const contextWindows = {
+                window1m: {
+                    polarity: (lastCandle && lastCandle.polarity) || 'UNKNOWN',
+                    pattern: (lastCandle && lastCandle.pattern) || 'NORMAL'
+                },
+                window2m: twoMinuteContext || (extracted.priceStructure === 'HIGHER_HIGHS_HIGHER_LOWS' ? 'BULLISH_CONTINUATION' : extracted.priceStructure === 'LOWER_HIGHS_LOWER_LOWS' ? 'BEARISH_CONTINUATION' : 'NEUTRAL'),
+                window5m: fiveMinuteContext || extracted.visualTrend || 'NEUTRAL'
+            };
+
+            // Conflict check: 5-minute broader trend vs 1-minute immediate setup (Test 10)
+            // When 5m broader trend opposes the 1m setup without explicit reversal confluence (e.g. support bounce/rejection),
+            // flag it conservatively to protect precision.
+            if (fiveMinuteContext === 'BEARISH' && priceActionUp.length > 0) {
+                if (volatilityUp.length === 0 && momentumUp.length === 0) {
+                    conflicting.push('Five-minute broader trend context (BEARISH) conflicts with one-minute bullish setup.');
+                }
+            } else if (fiveMinuteContext === 'BULLISH' && priceActionDown.length > 0) {
+                if (volatilityDown.length === 0 && momentumDown.length === 0) {
+                    conflicting.push('Five-minute broader trend context (BULLISH) conflicts with one-minute bearish setup.');
+                }
+            }
+
             // Strict Confluence & Directional Balance Evaluation:
             // 1. Requires PRICE_ACTION (completed candle)
             // 2. PLUS at least one independent MOMENTUM or VOLATILITY confirmation
@@ -350,6 +405,7 @@
                 volatilityEvidence: volatilityUp.length > 0 ? volatilityUp.slice() : volatilityDown.slice(),
                 waitReason,
                 indicatorsEvaluated: indicators,
+                contextWindows,
                 analyzedAt: now
             };
         }

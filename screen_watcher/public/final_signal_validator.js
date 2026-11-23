@@ -24,8 +24,18 @@
     const MAX_STALENESS_MS = 30000;
 
     function createValidator() {
+        let lastConfirmedSignal = null;
+        let activeTrendDirection = null;
+
+        function reset() {
+            lastConfirmedSignal = null;
+            activeTrendDirection = null;
+        }
+
         /**
          * Validates and arbitrates between local technical engine output and background vision response.
+         * Enforces 3 signal states: ACTIVE_TREND, NEW_SETUP_DETECTED, NEW_SIGNAL_CONFIRMED.
+         * Enforces Smart Duplicate Protection, multi-window context, and missed entry guards.
          *
          * @param {Object} params
          * @param {Object} params.localResult Output of LocalTechnicalEngine
@@ -51,6 +61,10 @@
                 return {
                     id: `signal-stale-${now}`,
                     direction: 'WAIT',
+                    signalState: 'WAIT',
+                    isContinuation: false,
+                    isDuplicate: false,
+                    previousSignalId: lastConfirmedSignal ? lastConfirmedSignal.id : null,
                     explanation: `WAIT — DELAYED ANALYSIS (Frame age: ${(frameAgeMs / 1000).toFixed(1)}s). The captured chart frame is outdated and no longer actionable in live market.`,
                     observations: {
                         ema9: 'Stale frame rejected',
@@ -76,6 +90,12 @@
                 if (localResult && localResult.conflictingEvidence.length > 0) {
                     uncertainties.push(...localResult.conflictingEvidence);
                 }
+                confidence = 'WAIT';
+            } else if (localResult.missedEntry || (localResult.waitReason && localResult.waitReason.includes('MISSED ENTRY'))) {
+                // Guard 2b: Entry Quality Guard (WAIT — MISSED ENTRY)
+                direction = 'WAIT';
+                explanation = localResult.waitReason || 'WAIT — MISSED ENTRY. The price move has already occurred before entry.';
+                uncertainties.push('Price move already developed before entry; late entry rejected to protect precision.');
                 confidence = 'WAIT';
             } else {
                 // Directional candidate ('UP' or 'DOWN') from local engine
@@ -132,6 +152,78 @@
                 }
             }
 
+            // SMART DUPLICATE PROTECTION & THREE SIGNAL STATES:
+            // State A: ACTIVE TREND (Track current direction, continuous analysis, suppress duplicate notifications)
+            // State B: NEW SETUP DETECTED (Detect new candle/setup, compare against previous signal identity)
+            // State C: NEW SIGNAL CONFIRMED (Publish only when genuinely new opportunity passes validator)
+            const candleId = (localResult && localResult.candleId) || 'candle-current';
+            const setupEvidence = (localResult && localResult.supportingEvidence) || [];
+            const setupHash = `${direction}_${candleId}_${setupEvidence.join('|')}`;
+            let signalState = direction === 'WAIT' ? (lastConfirmedSignal ? 'ACTIVE_TREND' : 'WAIT') : 'NEW_SIGNAL_CONFIRMED';
+            let isContinuation = false;
+            let isDuplicate = false;
+            let previousSignalId = lastConfirmedSignal ? lastConfirmedSignal.id : null;
+            let finalSignalId = `signal-${now}`;
+
+            if (direction === 'UP' || direction === 'DOWN') {
+                if (lastConfirmedSignal) {
+                    const isSameCandle = candleId === lastConfirmedSignal.candleId;
+                    const isSameDirection = direction === lastConfirmedSignal.direction;
+                    const isSameSetup = setupHash === lastConfirmedSignal.setupHash;
+
+                    if (isSameCandle && isSameDirection) {
+                        // Duplicate setup: same candle & direction already signaled
+                        isDuplicate = true;
+                        signalState = 'ACTIVE_TREND';
+                        finalSignalId = lastConfirmedSignal.id; // Retain existing signal ID
+                        explanation = `${direction} ACTIVE TREND — Monitoring live candle development. [Setup already confirmed on ${candleId}]`;
+                    } else if (!isSameCandle && isSameDirection) {
+                        // Continuation: genuinely new completed candle forming a fresh setup in active trend
+                        isContinuation = true;
+                        signalState = 'NEW_SIGNAL_CONFIRMED';
+                        finalSignalId = `signal-${direction.toLowerCase()}-${now}-${Math.random().toString(36).slice(2, 6)}`;
+                        explanation = `${direction} CONTINUATION SIGNAL — Genuinely new setup confirmed by technical confluence (${setupEvidence.join(' ')}). [Continuation of ${lastConfirmedSignal.id}]`;
+                        lastConfirmedSignal = {
+                            id: finalSignalId,
+                            direction,
+                            candleId,
+                            setupHash,
+                            timestamp: now,
+                            evidence: setupEvidence.slice()
+                        };
+                        activeTrendDirection = direction;
+                    } else if (!isSameDirection) {
+                        // Reversal: market conditions reversed, evaluate independently
+                        isContinuation = false;
+                        signalState = 'NEW_SIGNAL_CONFIRMED';
+                        finalSignalId = `signal-${direction.toLowerCase()}-${now}-${Math.random().toString(36).slice(2, 6)}`;
+                        explanation = `${direction} REVERSAL SIGNAL — Validated reversal against prior ${lastConfirmedSignal.direction} trend (${setupEvidence.join(' ')}). [Reversal from ${lastConfirmedSignal.id}]`;
+                        lastConfirmedSignal = {
+                            id: finalSignalId,
+                            direction,
+                            candleId,
+                            setupHash,
+                            timestamp: now,
+                            evidence: setupEvidence.slice()
+                        };
+                        activeTrendDirection = direction;
+                    }
+                } else {
+                    // Initial confirmed signal
+                    signalState = 'NEW_SIGNAL_CONFIRMED';
+                    finalSignalId = `signal-${direction.toLowerCase()}-${now}-${Math.random().toString(36).slice(2, 6)}`;
+                    lastConfirmedSignal = {
+                        id: finalSignalId,
+                        direction,
+                        candleId,
+                        setupHash,
+                        timestamp: now,
+                        evidence: setupEvidence.slice()
+                    };
+                    activeTrendDirection = direction;
+                }
+            }
+
             // Compile structured observation map for UI display with explicit transparency labels
             const evaluated = (localResult && localResult.indicatorsEvaluated) || {};
             const observations = {
@@ -159,9 +251,14 @@
                 signal: direction,
                 signalStrength,
                 qualityLevel,
+                signalState,
+                isContinuation,
+                isDuplicate,
+                previousSignalId,
+                setupHash,
                 candidateDirection: (localResult && localResult.candidate) || 'WAIT',
                 approved: direction === 'UP' || direction === 'DOWN',
-                candleIdentity: (localResult && localResult.candleId) || 'candle-current',
+                candleIdentity: candleId,
                 candleCompletionStatus: Boolean(localResult && localResult.candleCompleted),
                 dataQuality: (localResult && localResult.dataQuality) || 'VISUAL_ESTIMATE',
                 priceActionEvidence: (localResult && localResult.priceActionEvidence) || [],
@@ -176,8 +273,14 @@
             };
 
             return {
-                id: `signal-${now}`,
+                id: finalSignalId,
                 direction,
+                signalState,
+                isContinuation,
+                isDuplicate,
+                previousSignalId,
+                candleId,
+                setupHash,
                 signal_strength: signalStrength,
                 quality_level: qualityLevel,
                 explanation,
@@ -190,7 +293,7 @@
             };
         }
 
-        return { validate, MAX_STALENESS_MS };
+        return { validate, reset, getLastConfirmedSignal: () => lastConfirmedSignal, MAX_STALENESS_MS };
     }
 
     return { createValidator };
