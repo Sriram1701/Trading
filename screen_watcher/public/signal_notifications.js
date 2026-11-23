@@ -97,11 +97,12 @@
                 return false;
             }
 
-            // 5. Directional duplicate check with continuation bypass
-            const isDuplicateDirection = analysis.direction === lastLiveDirection;
-            const withinCooldown = (now - lastLiveAlertTime) < cooldownMs;
+            // 5. Minimum 60-second signal publication interval:
+            // After a signal is published, wait at least 60 seconds before publishing another signal
+            const timeSinceLastAlert = now - lastLiveAlertTime;
+            const withinMinimumInterval = lastLiveAlertTime > 0 && timeSinceLastAlert < cooldownMs;
 
-            if (isDuplicateDirection && withinCooldown && !isContinuation) {
+            if (withinMinimumInterval) {
                 if (typeof onLiveAnalysis === 'function') onLiveAnalysis(analysis);
                 return false;
             }

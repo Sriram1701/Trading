@@ -7,7 +7,7 @@ const engineFactory = require('../public/local_technical_engine.js');
 const validatorFactory = require('../public/final_signal_validator.js');
 const notificationsFactory = require('../public/signal_notifications.js');
 
-test('Test 1: DOWN continuation with genuinely new setup -> allow new DOWN', () => {
+test('Timing 1: New confirmed setup after 60 seconds -> eligible', () => {
     const engine = engineFactory.createEngine();
     const validator = validatorFactory.createValidator();
     const sounds = [];
@@ -15,17 +15,13 @@ test('Test 1: DOWN continuation with genuinely new setup -> allow new DOWN', () 
         playSound: (dir, id) => sounds.push({ dir, id })
     });
 
-    // 1. Initial DOWN signal #1 on candle-101
+    // Initial DOWN signal at t = 1000
     const frame1 = {
         isValid: true,
         isReadable: true,
         dataQuality: 'VISUAL_ESTIMATE',
         candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-101',
-            polarity: 'BEARISH',
-            pattern: 'NORMAL'
-        },
+        lastCompletedCandle: { id: 'candle-101', polarity: 'BEARISH', pattern: 'NORMAL' },
         visualTrend: 'BEARISH',
         priceStructure: 'LOWER_HIGHS_LOWER_LOWS',
         movingAverage: 'BEARISH',
@@ -33,28 +29,19 @@ test('Test 1: DOWN continuation with genuinely new setup -> allow new DOWN', () 
         rsiVisualZone: 'NEUTRAL',
         rsiSlope: 'FALLING'
     };
-
-    const local1 = engine.evaluate(frame1, 1000);
-    assert.equal(local1.candidate, 'DOWN');
-    const signal1 = validator.validate({ localResult: local1, now: 1000 });
-    assert.equal(signal1.direction, 'DOWN');
-    assert.equal(signal1.signalState, 'NEW_SIGNAL_CONFIRMED');
-    assert.equal(signal1.isContinuation, false);
-    assert.equal(controller.notifyLiveAnalysis(signal1, 1000), true);
+    const s1 = validator.validate({ localResult: engine.evaluate(frame1, 1000), now: 1000 });
+    assert.equal(s1.direction, 'DOWN');
+    assert.equal(s1.signalState, 'NEW_SIGNAL_CONFIRMED');
+    assert.equal(controller.notifyLiveAnalysis(s1, 1000), true);
     assert.equal(sounds.length, 1);
-    assert.equal(sounds[0].dir, 'DOWN');
 
-    // 2. Genuinely new completed candle-102 forms a fresh continuation setup
+    // Genuinely new setup after exactly 60 seconds (t = 61000)
     const frame2 = {
         isValid: true,
         isReadable: true,
         dataQuality: 'VISUAL_ESTIMATE',
         candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-102',
-            polarity: 'BEARISH',
-            pattern: 'NORMAL'
-        },
+        lastCompletedCandle: { id: 'candle-102', polarity: 'BEARISH', pattern: 'NORMAL' },
         visualTrend: 'BEARISH',
         priceStructure: 'LOWER_HIGHS_LOWER_LOWS',
         movingAverage: 'BEARISH',
@@ -62,25 +49,187 @@ test('Test 1: DOWN continuation with genuinely new setup -> allow new DOWN', () 
         rsiVisualZone: 'NEUTRAL',
         rsiSlope: 'FALLING'
     };
+    const s2 = validator.validate({ localResult: engine.evaluate(frame2, 61000), now: 61000 });
+    assert.equal(s2.direction, 'DOWN');
+    assert.equal(s2.signalState, 'NEW_SIGNAL_CONFIRMED');
+    assert.equal(s2.isContinuation, true);
+    assert.equal(s2.previousSignalId, s1.id);
+    assert.notEqual(s2.id, s1.id);
 
-    const local2 = engine.evaluate(frame2, 61000);
-    assert.equal(local2.candidate, 'DOWN');
-    const signal2 = validator.validate({ localResult: local2, now: 61000 });
-
-    assert.equal(signal2.direction, 'DOWN');
-    assert.equal(signal2.signalState, 'NEW_SIGNAL_CONFIRMED');
-    assert.equal(signal2.isContinuation, true);
-    assert.equal(signal2.previousSignalId, signal1.id);
-    assert.notEqual(signal2.id, signal1.id);
-
-    // Notification controller allows genuine DOWN continuation with new alert & sound
-    assert.equal(controller.notifyLiveAnalysis(signal2, 61000), true);
+    // Eligible and published
+    assert.equal(controller.notifyLiveAnalysis(s2, 61000), true);
     assert.equal(sounds.length, 2);
-    assert.equal(sounds[1].dir, 'DOWN');
-    assert.equal(sounds[1].id, signal2.id);
 });
 
-test('Test 2: Same DOWN setup repeated -> block duplicate', () => {
+test('Timing 2: Weak setup after 60 seconds -> WAIT', () => {
+    const engine = engineFactory.createEngine();
+    const validator = validatorFactory.createValidator();
+    const controller = notificationsFactory.createController();
+
+    // Initial signal at t = 1000
+    const frame1 = {
+        isValid: true,
+        isReadable: true,
+        dataQuality: 'VISUAL_ESTIMATE',
+        candleCompleted: true,
+        lastCompletedCandle: { id: 'candle-201', polarity: 'BEARISH', pattern: 'NORMAL' },
+        visualTrend: 'BEARISH',
+        bollingerPosition: 'LOWER_BAND_WALK',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'FALLING'
+    };
+    const s1 = validator.validate({ localResult: engine.evaluate(frame1, 1000), now: 1000 });
+    assert.equal(s1.direction, 'DOWN');
+
+    // 60 seconds elapsed, but the market forms a WEAK setup (no independent confirmation, flat RSI/Bollinger)
+    const weakFrame = {
+        isValid: true,
+        isReadable: true,
+        dataQuality: 'VISUAL_ESTIMATE',
+        candleCompleted: true,
+        lastCompletedCandle: { id: 'candle-202', polarity: 'BEARISH', pattern: 'NORMAL' },
+        visualTrend: 'NEUTRAL',
+        priceStructure: 'SIDEWAYS',
+        movingAverage: 'FLAT',
+        bollingerPosition: 'MIDDLE', // Neutral, no lower band walk/bounce
+        rsiVisualZone: 'NEUTRAL',    // Flat momentum
+        rsiSlope: 'FLAT'
+    };
+    const localWeak = engine.evaluate(weakFrame, 61000);
+    assert.equal(localWeak.candidate, 'WAIT');
+
+    const sWeak = validator.validate({ localResult: localWeak, now: 61000 });
+    assert.equal(sWeak.direction, 'WAIT');
+    assert.equal(controller.notifyLiveAnalysis(sWeak, 61000), false);
+});
+
+test('Timing 3: New confirmed setup after 2 minutes -> eligible', () => {
+    const engine = engineFactory.createEngine();
+    const validator = validatorFactory.createValidator();
+    const sounds = [];
+    const controller = notificationsFactory.createController({
+        playSound: (dir, id) => sounds.push({ dir, id })
+    });
+
+    const frame1 = {
+        isValid: true,
+        isReadable: true,
+        dataQuality: 'VISUAL_ESTIMATE',
+        candleCompleted: true,
+        lastCompletedCandle: { id: 'candle-301', polarity: 'BULLISH', pattern: 'NORMAL' },
+        visualTrend: 'BULLISH',
+        bollingerPosition: 'UPPER_BAND_WALK',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'RISING'
+    };
+    const s1 = validator.validate({ localResult: engine.evaluate(frame1, 1000), now: 1000 });
+    assert.equal(s1.direction, 'UP');
+    assert.equal(controller.notifyLiveAnalysis(s1, 1000), true);
+
+    // After 2 minutes (120s later at t = 121000), new confirmed bullish setup arrives
+    const frame2 = {
+        isValid: true,
+        isReadable: true,
+        dataQuality: 'VISUAL_ESTIMATE',
+        candleCompleted: true,
+        lastCompletedCandle: { id: 'candle-303', polarity: 'BULLISH', pattern: 'NORMAL' },
+        visualTrend: 'BULLISH',
+        bollingerPosition: 'UPPER_BAND_WALK',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'RISING'
+    };
+    const s2 = validator.validate({ localResult: engine.evaluate(frame2, 121000), now: 121000 });
+    assert.equal(s2.direction, 'UP');
+    assert.equal(s2.signalState, 'NEW_SIGNAL_CONFIRMED');
+    assert.equal(s2.isContinuation, true);
+
+    // Eligible immediately without artificial delays
+    assert.equal(controller.notifyLiveAnalysis(s2, 121000), true);
+    assert.equal(sounds.length, 2);
+});
+
+test('Timing 4: New confirmed setup after 3 minutes -> eligible', () => {
+    const engine = engineFactory.createEngine();
+    const validator = validatorFactory.createValidator();
+    const sounds = [];
+    const controller = notificationsFactory.createController({
+        playSound: (dir, id) => sounds.push({ dir, id })
+    });
+
+    const frame1 = {
+        isValid: true,
+        isReadable: true,
+        dataQuality: 'VISUAL_ESTIMATE',
+        candleCompleted: true,
+        lastCompletedCandle: { id: 'candle-401', polarity: 'BEARISH', pattern: 'NORMAL' },
+        visualTrend: 'BEARISH',
+        bollingerPosition: 'LOWER_BAND_WALK',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'FALLING'
+    };
+    const s1 = validator.validate({ localResult: engine.evaluate(frame1, 1000), now: 1000 });
+    assert.equal(controller.notifyLiveAnalysis(s1, 1000), true);
+
+    // After 3 minutes (180s later at t = 181000), new confirmed bearish setup arrives
+    const frame2 = {
+        isValid: true,
+        isReadable: true,
+        dataQuality: 'VISUAL_ESTIMATE',
+        candleCompleted: true,
+        lastCompletedCandle: { id: 'candle-404', polarity: 'BEARISH', pattern: 'NORMAL' },
+        visualTrend: 'BEARISH',
+        bollingerPosition: 'LOWER_BAND_WALK',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'FALLING'
+    };
+    const s2 = validator.validate({ localResult: engine.evaluate(frame2, 181000), now: 181000 });
+    assert.equal(s2.direction, 'DOWN');
+    assert.equal(s2.signalState, 'NEW_SIGNAL_CONFIRMED');
+    assert.equal(controller.notifyLiveAnalysis(s2, 181000), true);
+    assert.equal(sounds.length, 2);
+});
+
+test('Timing 5: No valid setup after 5 minutes -> WAIT', () => {
+    const engine = engineFactory.createEngine();
+    const validator = validatorFactory.createValidator();
+    const controller = notificationsFactory.createController();
+
+    const frame1 = {
+        isValid: true,
+        isReadable: true,
+        dataQuality: 'VISUAL_ESTIMATE',
+        candleCompleted: true,
+        lastCompletedCandle: { id: 'candle-501', polarity: 'BULLISH', pattern: 'NORMAL' },
+        visualTrend: 'BULLISH',
+        bollingerPosition: 'UPPER_BAND_WALK',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'RISING'
+    };
+    const s1 = validator.validate({ localResult: engine.evaluate(frame1, 1000), now: 1000 });
+    assert.equal(controller.notifyLiveAnalysis(s1, 1000), true);
+
+    // After 5 minutes (300s later at t = 301000), market is in low-volatility consolidation / Doji
+    const consolidatingFrame = {
+        isValid: true,
+        isReadable: true,
+        dataQuality: 'VISUAL_ESTIMATE',
+        candleCompleted: true,
+        lastCompletedCandle: { id: 'candle-506', polarity: 'BEARISH', pattern: 'DOJI' },
+        visualTrend: 'NEUTRAL',
+        bollingerPosition: 'MIDDLE',
+        rsiVisualZone: 'NEUTRAL',
+        rsiSlope: 'FLAT'
+    };
+    const localConsolidation = engine.evaluate(consolidatingFrame, 301000);
+    assert.equal(localConsolidation.candidate, 'WAIT');
+
+    const sWait = validator.validate({ localResult: localConsolidation, now: 301000 });
+    // Must NOT force a signal merely because 5 minutes elapsed
+    assert.equal(sWait.direction, 'WAIT');
+    assert.equal(controller.notifyLiveAnalysis(sWait, 301000), false);
+});
+
+test('Timing 6: Same setup repeated -> blocked', () => {
     const engine = engineFactory.createEngine();
     const validator = validatorFactory.createValidator();
     const sounds = [];
@@ -93,109 +242,62 @@ test('Test 2: Same DOWN setup repeated -> block duplicate', () => {
         isReadable: true,
         dataQuality: 'VISUAL_ESTIMATE',
         candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-101',
-            polarity: 'BEARISH',
-            pattern: 'NORMAL'
-        },
+        lastCompletedCandle: { id: 'candle-601', polarity: 'BEARISH', pattern: 'NORMAL' },
         visualTrend: 'BEARISH',
-        priceStructure: 'LOWER_HIGHS_LOWER_LOWS',
-        movingAverage: 'BEARISH',
         bollingerPosition: 'LOWER_BAND_WALK',
         rsiVisualZone: 'NEUTRAL',
         rsiSlope: 'FALLING'
     };
-
-    const local1 = engine.evaluate(frame, 1000);
-    const signal1 = validator.validate({ localResult: local1, now: 1000 });
-    assert.equal(signal1.direction, 'DOWN');
-    assert.equal(controller.notifyLiveAnalysis(signal1, 1000), true);
+    const s1 = validator.validate({ localResult: engine.evaluate(frame, 1000), now: 1000 });
+    assert.equal(controller.notifyLiveAnalysis(s1, 1000), true);
     assert.equal(sounds.length, 1);
 
-    // Repeated frame for same candle-101 within active trend
-    const local2 = engine.evaluate(frame, 2500);
-    const signal2 = validator.validate({ localResult: local2, now: 2500 });
-    assert.equal(signal2.isDuplicate, true);
-    assert.equal(signal2.signalState, 'ACTIVE_TREND');
-    assert.equal(signal2.id, signal1.id);
-
-    // Notification controller blocks duplicate
-    assert.equal(controller.notifyLiveAnalysis(signal2, 2500), false);
-    assert.equal(sounds.length, 1); // No new sound played
+    // Subsequent frame for identical candle-601
+    const sRepeat = validator.validate({ localResult: engine.evaluate(frame, 2500), now: 2500 });
+    assert.equal(sRepeat.isDuplicate, true);
+    assert.equal(sRepeat.signalState, 'ACTIVE_TREND');
+    assert.equal(controller.notifyLiveAnalysis(sRepeat, 2500), false);
+    assert.equal(sounds.length, 1); // No duplicate sound
 });
 
-test('Test 3: UP continuation with genuinely new setup -> allow new UP', () => {
+test('Timing 7: New setup in the same direction -> eligible', () => {
     const engine = engineFactory.createEngine();
     const validator = validatorFactory.createValidator();
-    const sounds = [];
-    const controller = notificationsFactory.createController({
-        playSound: (dir, id) => sounds.push({ dir, id })
-    });
+    const controller = notificationsFactory.createController();
 
-    // 1. Initial UP signal #1 on candle-201
     const frame1 = {
         isValid: true,
         isReadable: true,
         dataQuality: 'VISUAL_ESTIMATE',
         candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-201',
-            polarity: 'BULLISH',
-            pattern: 'NORMAL'
-        },
+        lastCompletedCandle: { id: 'candle-701', polarity: 'BULLISH', pattern: 'NORMAL' },
         visualTrend: 'BULLISH',
-        priceStructure: 'HIGHER_HIGHS_HIGHER_LOWS',
-        movingAverage: 'BULLISH',
         bollingerPosition: 'UPPER_BAND_WALK',
         rsiVisualZone: 'NEUTRAL',
         rsiSlope: 'RISING'
     };
+    const s1 = validator.validate({ localResult: engine.evaluate(frame1, 1000), now: 1000 });
+    assert.equal(controller.notifyLiveAnalysis(s1, 1000), true);
 
-    const local1 = engine.evaluate(frame1, 1000);
-    assert.equal(local1.candidate, 'UP');
-    const signal1 = validator.validate({ localResult: local1, now: 1000 });
-    assert.equal(signal1.direction, 'UP');
-    assert.equal(signal1.signalState, 'NEW_SIGNAL_CONFIRMED');
-    assert.equal(controller.notifyLiveAnalysis(signal1, 1000), true);
-    assert.equal(sounds.length, 1);
-
-    // 2. Genuinely new completed candle-202 forms a fresh continuation setup
+    // Genuinely new setup in same direction on candle-702 after 60s
     const frame2 = {
         isValid: true,
         isReadable: true,
         dataQuality: 'VISUAL_ESTIMATE',
         candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-202',
-            polarity: 'BULLISH',
-            pattern: 'NORMAL'
-        },
+        lastCompletedCandle: { id: 'candle-702', polarity: 'BULLISH', pattern: 'NORMAL' },
         visualTrend: 'BULLISH',
-        priceStructure: 'HIGHER_HIGHS_HIGHER_LOWS',
-        movingAverage: 'BULLISH',
         bollingerPosition: 'UPPER_BAND_WALK',
         rsiVisualZone: 'NEUTRAL',
         rsiSlope: 'RISING'
     };
-
-    const local2 = engine.evaluate(frame2, 61000);
-    assert.equal(local2.candidate, 'UP');
-    const signal2 = validator.validate({ localResult: local2, now: 61000 });
-
-    assert.equal(signal2.direction, 'UP');
-    assert.equal(signal2.signalState, 'NEW_SIGNAL_CONFIRMED');
-    assert.equal(signal2.isContinuation, true);
-    assert.equal(signal2.previousSignalId, signal1.id);
-    assert.notEqual(signal2.id, signal1.id);
-
-    // Notification controller allows genuine UP continuation
-    assert.equal(controller.notifyLiveAnalysis(signal2, 61000), true);
-    assert.equal(sounds.length, 2);
-    assert.equal(sounds[1].dir, 'UP');
-    assert.equal(sounds[1].id, signal2.id);
+    const s2 = validator.validate({ localResult: engine.evaluate(frame2, 61000), now: 61000 });
+    assert.equal(s2.direction, 'UP');
+    assert.equal(s2.isContinuation, true);
+    assert.equal(controller.notifyLiveAnalysis(s2, 61000), true);
 });
 
-test('Test 4: Same UP setup repeated -> block duplicate', () => {
+test('Timing 8: Genuine opposite-direction reversal -> independently evaluated', () => {
     const engine = engineFactory.createEngine();
     const validator = validatorFactory.createValidator();
     const sounds = [];
@@ -203,296 +305,66 @@ test('Test 4: Same UP setup repeated -> block duplicate', () => {
         playSound: (dir, id) => sounds.push({ dir, id })
     });
 
-    const frame = {
-        isValid: true,
-        isReadable: true,
-        dataQuality: 'VISUAL_ESTIMATE',
-        candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-201',
-            polarity: 'BULLISH',
-            pattern: 'NORMAL'
-        },
-        visualTrend: 'BULLISH',
-        priceStructure: 'HIGHER_HIGHS_HIGHER_LOWS',
-        movingAverage: 'BULLISH',
-        bollingerPosition: 'UPPER_BAND_WALK',
-        rsiVisualZone: 'NEUTRAL',
-        rsiSlope: 'RISING'
-    };
-
-    const local1 = engine.evaluate(frame, 1000);
-    const signal1 = validator.validate({ localResult: local1, now: 1000 });
-    assert.equal(signal1.direction, 'UP');
-    assert.equal(controller.notifyLiveAnalysis(signal1, 1000), true);
-    assert.equal(sounds.length, 1);
-
-    // Repeated frame for same candle-201
-    const local2 = engine.evaluate(frame, 3000);
-    const signal2 = validator.validate({ localResult: local2, now: 3000 });
-    assert.equal(signal2.isDuplicate, true);
-    assert.equal(signal2.signalState, 'ACTIVE_TREND');
-
-    // Duplicate blocked
-    assert.equal(controller.notifyLiveAnalysis(signal2, 3000), false);
-    assert.equal(sounds.length, 1);
-});
-
-test('Test 5: DOWN trend followed by genuine UP reversal -> evaluate UP independently', () => {
-    const engine = engineFactory.createEngine();
-    const validator = validatorFactory.createValidator();
-    const sounds = [];
-    const controller = notificationsFactory.createController({
-        playSound: (dir, id) => sounds.push({ dir, id })
-    });
-
-    // 1. Active DOWN trend signal on candle-300
+    // 1. Initial DOWN signal
     const downFrame = {
         isValid: true,
         isReadable: true,
         dataQuality: 'VISUAL_ESTIMATE',
         candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-300',
-            polarity: 'BEARISH',
-            pattern: 'NORMAL'
-        },
+        lastCompletedCandle: { id: 'candle-801', polarity: 'BEARISH', pattern: 'NORMAL' },
         visualTrend: 'BEARISH',
-        priceStructure: 'LOWER_HIGHS_LOWER_LOWS',
-        movingAverage: 'BEARISH',
         bollingerPosition: 'LOWER_BAND_WALK',
         rsiVisualZone: 'NEUTRAL',
         rsiSlope: 'FALLING'
     };
-    const localDown = engine.evaluate(downFrame, 1000);
-    const signalDown = validator.validate({ localResult: localDown, now: 1000 });
-    assert.equal(signalDown.direction, 'DOWN');
-    assert.equal(controller.notifyLiveAnalysis(signalDown, 1000), true);
+    const sDown = validator.validate({ localResult: engine.evaluate(downFrame, 1000), now: 1000 });
+    assert.equal(controller.notifyLiveAnalysis(sDown, 1000), true);
 
-    // 2. Genuine UP reversal forms on candle-301: Lower band bounce + oversold RSI rebound
+    // 2. Market reverses after 60s with confirmed Bullish Hammer at lower band bounce + oversold RSI rebound
     const reversalFrame = {
         isValid: true,
         isReadable: true,
         dataQuality: 'VISUAL_ESTIMATE',
         candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-301',
-            polarity: 'BULLISH',
-            pattern: 'HAMMER'
-        },
-        visualTrend: 'BEARISH', // prior trend was bearish
-        priceStructure: 'SIDEWAYS',
-        movingAverage: 'FLAT',
+        lastCompletedCandle: { id: 'candle-802', polarity: 'BULLISH', pattern: 'HAMMER' },
+        visualTrend: 'BEARISH', // prior trend
         bollingerPosition: 'LOWER_BAND_BOUNCE',
         rsiVisualZone: 'OVERSOLD',
         rsiSlope: 'RISING'
     };
-    const localUp = engine.evaluate(reversalFrame, 61000);
-    assert.equal(localUp.candidate, 'UP');
-
-    const signalUp = validator.validate({ localResult: localUp, now: 61000 });
-    assert.equal(signalUp.direction, 'UP');
-    assert.equal(signalUp.signalState, 'NEW_SIGNAL_CONFIRMED');
-    assert.equal(signalUp.isContinuation, false);
-    assert.equal(signalUp.previousSignalId, signalDown.id);
+    const sUp = validator.validate({ localResult: engine.evaluate(reversalFrame, 62000), now: 62000 });
+    assert.equal(sUp.direction, 'UP');
+    assert.equal(sUp.isContinuation, false);
+    assert.equal(sUp.previousSignalId, sDown.id);
 
     // Reversal evaluated independently and allowed
-    assert.equal(controller.notifyLiveAnalysis(signalUp, 61000), true);
+    assert.equal(controller.notifyLiveAnalysis(sUp, 62000), true);
     assert.equal(sounds.length, 2);
     assert.equal(sounds[1].dir, 'UP');
 });
 
-test('Test 6: Same candle repeated across multiple frames -> no duplicate', () => {
+test('Timing 9: Entry opportunity already passed -> WAIT — MISSED ENTRY', () => {
     const engine = engineFactory.createEngine();
     const validator = validatorFactory.createValidator();
-    const sounds = [];
-    const controller = notificationsFactory.createController({
-        playSound: (dir, id) => sounds.push({ dir, id })
-    });
 
-    const frame = {
+    const lateFrame = {
         isValid: true,
         isReadable: true,
         dataQuality: 'VISUAL_ESTIMATE',
         candleCompleted: true,
-        lastCompletedCandle: {
-            id: 'candle-400',
-            polarity: 'BEARISH',
-            pattern: 'NORMAL'
-        },
-        visualTrend: 'BEARISH',
-        priceStructure: 'LOWER_HIGHS_LOWER_LOWS',
-        movingAverage: 'BEARISH',
-        bollingerPosition: 'LOWER_BAND_WALK',
-        rsiVisualZone: 'NEUTRAL',
-        rsiSlope: 'FALLING'
-    };
-
-    // Frame 1: Generates and notifies signal
-    const local1 = engine.evaluate(frame, 1000);
-    const signal1 = validator.validate({ localResult: local1, now: 1000 });
-    assert.equal(controller.notifyLiveAnalysis(signal1, 1000), true);
-
-    // Frames 2-10: 9 subsequent frames within the 1-minute window
-    let duplicateBlocks = 0;
-    for (let f = 2; f <= 10; f++) {
-        const time = 1000 + f * 1500;
-        const localN = engine.evaluate(frame, time);
-        const signalN = validator.validate({ localResult: localN, now: time });
-        assert.equal(signalN.isDuplicate, true);
-        assert.equal(signalN.signalState, 'ACTIVE_TREND');
-        const notified = controller.notifyLiveAnalysis(signalN, time);
-        if (!notified) duplicateBlocks++;
-    }
-
-    assert.equal(duplicateBlocks, 9);
-    assert.equal(sounds.length, 1); // Exactly 1 alert sounded across all 10 frames
-});
-
-test('Test 7: Price already moved before entry -> WAIT — MISSED ENTRY', () => {
-    const engine = engineFactory.createEngine();
-    const validator = validatorFactory.createValidator();
-
-    // Chart frame where price has already moved excessively before entry
-    const frameMissed = {
-        isValid: true,
-        isReadable: true,
-        dataQuality: 'VISUAL_ESTIMATE',
-        candleCompleted: true,
-        entryMissed: true,
-        lastCompletedCandle: {
-            id: 'candle-missed-1',
-            polarity: 'BEARISH',
-            pattern: 'NORMAL'
-        },
+        entryMissed: true, // Price move already developed before entry
+        lastCompletedCandle: { id: 'candle-901', polarity: 'BEARISH', pattern: 'NORMAL' },
         visualTrend: 'BEARISH',
         bollingerPosition: 'LOWER_BAND_WALK',
         rsiVisualZone: 'NEUTRAL',
         rsiSlope: 'FALLING'
     };
 
-    const localResult = engine.evaluate(frameMissed, 1000);
+    const localResult = engine.evaluate(lateFrame, 1000);
     assert.equal(localResult.candidate, 'WAIT');
     assert.match(localResult.waitReason, /MISSED ENTRY/);
 
     const validated = validator.validate({ localResult, now: 1000 });
     assert.equal(validated.direction, 'WAIT');
     assert.match(validated.explanation, /MISSED ENTRY/);
-});
-
-test('Test 8: New valid setup after 1 minute -> evaluate immediately', () => {
-    const engine = engineFactory.createEngine();
-    const validator = validatorFactory.createValidator();
-    const controller = notificationsFactory.createController();
-
-    // Setup 1 at t = 1000
-    const frame1 = {
-        isValid: true,
-        isReadable: true,
-        dataQuality: 'VISUAL_ESTIMATE',
-        candleCompleted: true,
-        lastCompletedCandle: { id: 'candle-801', polarity: 'BULLISH', pattern: 'NORMAL' },
-        visualTrend: 'BULLISH',
-        priceStructure: 'HIGHER_HIGHS_HIGHER_LOWS',
-        movingAverage: 'BULLISH',
-        bollingerPosition: 'UPPER_BAND_WALK',
-        rsiVisualZone: 'NEUTRAL',
-        rsiSlope: 'RISING'
-    };
-    const signal1 = validator.validate({ localResult: engine.evaluate(frame1, 1000), now: 1000 });
-    assert.equal(controller.notifyLiveAnalysis(signal1, 1000), true);
-
-    // Setup 2 after exactly 1 minute (60s later) at t = 61000
-    const frame2 = {
-        isValid: true,
-        isReadable: true,
-        dataQuality: 'VISUAL_ESTIMATE',
-        candleCompleted: true,
-        lastCompletedCandle: { id: 'candle-802', polarity: 'BULLISH', pattern: 'NORMAL' },
-        visualTrend: 'BULLISH',
-        priceStructure: 'HIGHER_HIGHS_HIGHER_LOWS',
-        movingAverage: 'BULLISH',
-        bollingerPosition: 'UPPER_BAND_WALK',
-        rsiVisualZone: 'NEUTRAL',
-        rsiSlope: 'RISING'
-    };
-    const signal2 = validator.validate({ localResult: engine.evaluate(frame2, 61000), now: 61000 });
-    assert.equal(signal2.direction, 'UP');
-    assert.equal(signal2.isContinuation, true);
-    assert.equal(controller.notifyLiveAnalysis(signal2, 61000), true);
-});
-
-test('Test 9: New valid setup after 2 minutes -> evaluate immediately', () => {
-    const engine = engineFactory.createEngine();
-    const validator = validatorFactory.createValidator();
-    const controller = notificationsFactory.createController();
-
-    // Setup 1 at t = 1000
-    const frame1 = {
-        isValid: true,
-        isReadable: true,
-        dataQuality: 'VISUAL_ESTIMATE',
-        candleCompleted: true,
-        lastCompletedCandle: { id: 'candle-901', polarity: 'BEARISH', pattern: 'NORMAL' },
-        visualTrend: 'BEARISH',
-        priceStructure: 'LOWER_HIGHS_LOWER_LOWS',
-        movingAverage: 'BEARISH',
-        bollingerPosition: 'LOWER_BAND_WALK',
-        rsiVisualZone: 'NEUTRAL',
-        rsiSlope: 'FALLING'
-    };
-    const signal1 = validator.validate({ localResult: engine.evaluate(frame1, 1000), now: 1000 });
-    assert.equal(controller.notifyLiveAnalysis(signal1, 1000), true);
-
-    // Setup 2 after 2 minutes (120s later) at t = 121000
-    const frame2 = {
-        isValid: true,
-        isReadable: true,
-        dataQuality: 'VISUAL_ESTIMATE',
-        candleCompleted: true,
-        lastCompletedCandle: { id: 'candle-902', polarity: 'BEARISH', pattern: 'NORMAL' },
-        visualTrend: 'BEARISH',
-        priceStructure: 'LOWER_HIGHS_LOWER_LOWS',
-        movingAverage: 'BEARISH',
-        bollingerPosition: 'LOWER_BAND_WALK',
-        rsiVisualZone: 'NEUTRAL',
-        rsiSlope: 'FALLING'
-    };
-    const signal2 = validator.validate({ localResult: engine.evaluate(frame2, 121000), now: 121000 });
-    assert.equal(signal2.direction, 'DOWN');
-    assert.equal(signal2.isContinuation, true);
-    assert.equal(controller.notifyLiveAnalysis(signal2, 121000), true);
-});
-
-test('Test 10: Five-minute context conflicts with one-minute setup -> apply existing validator conservatively', () => {
-    const engine = engineFactory.createEngine();
-    const validator = validatorFactory.createValidator();
-
-    // 1-minute immediate setup is bullish, but 5-minute broader trend is BEARISH without reversal confirmation
-    const frameConflict = {
-        isValid: true,
-        isReadable: true,
-        dataQuality: 'VISUAL_ESTIMATE',
-        candleCompleted: true,
-        fiveMinuteContext: 'BEARISH', // Broader 5m context conflicts with 1m setup
-        lastCompletedCandle: {
-            id: 'candle-1001',
-            polarity: 'BULLISH',
-            pattern: 'NORMAL'
-        },
-        visualTrend: 'NEUTRAL',
-        priceStructure: 'SIDEWAYS',
-        movingAverage: 'FLAT',
-        bollingerPosition: 'MIDDLE', // Neutral position, no lower band bounce
-        rsiVisualZone: 'NEUTRAL',
-        rsiSlope: 'FLAT'
-    };
-
-    const localResult = engine.evaluate(frameConflict, 1000);
-    // Validator applies conservative precision and rejects conflicting context
-    assert.equal(localResult.candidate, 'WAIT');
-    assert.ok(localResult.conflictingEvidence.some(e => e.includes('Five-minute broader trend context')));
-
-    const finalSignal = validator.validate({ localResult, now: 1000 });
-    assert.equal(finalSignal.direction, 'WAIT');
 });

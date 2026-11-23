@@ -152,10 +152,10 @@
                 }
             }
 
-            // SMART DUPLICATE PROTECTION & THREE SIGNAL STATES:
-            // State A: ACTIVE TREND (Track current direction, continuous analysis, suppress duplicate notifications)
+            // SMART DUPLICATE PROTECTION, PATIENT CONFIRMATION & THREE SIGNAL STATES:
+            // State A: ACTIVE TREND (Track current direction, continuous analysis, enforce 60s min publication interval)
             // State B: NEW SETUP DETECTED (Detect new candle/setup, compare against previous signal identity)
-            // State C: NEW SIGNAL CONFIRMED (Publish only when genuinely new opportunity passes validator)
+            // State C: NEW SIGNAL CONFIRMED (Publish only when genuinely new opportunity passes validator after min 60s)
             const candleId = (localResult && localResult.candleId) || 'candle-current';
             const setupEvidence = (localResult && localResult.supportingEvidence) || [];
             const setupHash = `${direction}_${candleId}_${setupEvidence.join('|')}`;
@@ -167,18 +167,31 @@
 
             if (direction === 'UP' || direction === 'DOWN') {
                 if (lastConfirmedSignal) {
+                    const timeSinceLastSignal = now - lastConfirmedSignal.timestamp;
                     const isSameCandle = candleId === lastConfirmedSignal.candleId;
                     const isSameDirection = direction === lastConfirmedSignal.direction;
                     const isSameSetup = setupHash === lastConfirmedSignal.setupHash;
 
-                    if (isSameCandle && isSameDirection) {
-                        // Duplicate setup: same candle & direction already signaled
+                    // Minimum 60-second signal publication interval:
+                    // After a signal is published, wait at least 60 seconds before publishing another signal.
+                    const withinPublicationInterval = timeSinceLastSignal < 60000;
+
+                    if (withinPublicationInterval) {
+                        // Within 60 seconds of previous published signal:
+                        // Continuous market analysis continues, but publication is deferred to protect trade execution.
                         isDuplicate = true;
                         signalState = 'ACTIVE_TREND';
-                        finalSignalId = lastConfirmedSignal.id; // Retain existing signal ID
+                        finalSignalId = lastConfirmedSignal.id;
+                        const remainingSec = Math.max(0, Math.round((60000 - timeSinceLastSignal) / 1000));
+                        explanation = `${direction} ACTIVE TREND — Minimum 60s publication interval active (${remainingSec}s remaining). Continuous analysis running. [Active: ${lastConfirmedSignal.candleId}]`;
+                    } else if (isSameCandle || isSameSetup) {
+                        // Same candle or same setup repeated after 60s: block duplicate
+                        isDuplicate = true;
+                        signalState = 'ACTIVE_TREND';
+                        finalSignalId = lastConfirmedSignal.id;
                         explanation = `${direction} ACTIVE TREND — Monitoring live candle development. [Setup already confirmed on ${candleId}]`;
                     } else if (!isSameCandle && isSameDirection) {
-                        // Continuation: genuinely new completed candle forming a fresh setup in active trend
+                        // Minimum 60s interval elapsed AND genuinely new completed candle forms continuation:
                         isContinuation = true;
                         signalState = 'NEW_SIGNAL_CONFIRMED';
                         finalSignalId = `signal-${direction.toLowerCase()}-${now}-${Math.random().toString(36).slice(2, 6)}`;
@@ -193,7 +206,7 @@
                         };
                         activeTrendDirection = direction;
                     } else if (!isSameDirection) {
-                        // Reversal: market conditions reversed, evaluate independently
+                        // Minimum 60s interval elapsed AND genuine reversal confirmed:
                         isContinuation = false;
                         signalState = 'NEW_SIGNAL_CONFIRMED';
                         finalSignalId = `signal-${direction.toLowerCase()}-${now}-${Math.random().toString(36).slice(2, 6)}`;
